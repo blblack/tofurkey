@@ -1,0 +1,11 @@
+# Example systemd unit file for tofurkey
+[Unit]
+Description=tofurkey
+After=local-fs.target
+After=network.target
+
+[Install]
+WantedBy=multi-user.target
+
+[Service]
+ExecStart=/usr/bin/tofurkey -v -k /etc/tofurkey.key
