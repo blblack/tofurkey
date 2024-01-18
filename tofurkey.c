@@ -188,7 +188,7 @@ static void do_keys(const struct cfg* cfg_p, const uint64_t now)
 
     // Constant non-secret context for the KDF (like an app-specific fixed salt)
     static const char kdf_ctx[crypto_kdf_blake2b_CONTEXTBYTES] = {
-        't', 'f', 'o', 'k', 'e', 'y', 's', '!'
+        't', 'o', 'f', 'u', 'r', 'k', 'e', 'y'
     };
 
     // Now read in the long-term main key file and generate our pair of ephemeral keys:
