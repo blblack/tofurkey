@@ -249,6 +249,7 @@ static void usage(void)
             "-V -- Verbose and also print TFO keys (mostly for testing, this leaks short-term secrets to stderr!)\n"
             "-P -- Override default procfs output path for setting keys (mostly for testing)\n"
             "-T -- Set a fake unix time value which never changes (mostly for testing, min value 1000000)\n\n"
+            "This is tofurkey v0.1\n"
            );
     exit(2);
 }
