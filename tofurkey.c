@@ -78,7 +78,7 @@ struct cfg {
 
 // Safely read the main key file
 F_NONNULL
-static void safe_read_keyfile(const char* main_key_path, uint8_t keybuf[static restrict crypto_kdf_blake2b_KEYBYTES])
+static void safe_read_keyfile(const char* restrict main_key_path, uint8_t keybuf[static restrict crypto_kdf_blake2b_KEYBYTES])
 {
     const int key_fd = open(main_key_path, O_CLOEXEC | O_RDONLY);
     if (key_fd < 0)

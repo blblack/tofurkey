@@ -1,5 +1,5 @@
 CPPFLAGS ?= -D_GNU_SOURCE
-CFLAGS ?= -std=c11 -O2 -Wall -Wextra -Wconversion -Warith-conversion -Wshadow -Warray-bounds=2 -Wcast-align=strict -Wcast-qual -Werror=vla -Wfloat-equal -Wstrict-overflow=5
+CFLAGS ?= -std=c11 -O2 -Wall -Wextra -Wconversion -Warith-conversion -Wshadow -Warray-bounds=2 -Wcast-align=strict -Wcast-qual -Werror=vla -Wfloat-equal -Wstrict-overflow=5 -Wstrict-aliasing
 LDFLAGS ?=
 LDLIBS ?= -lsodium -lev
 
