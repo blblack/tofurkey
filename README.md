@@ -5,7 +5,7 @@ deterministic rotation of TCP Fastopen (TFO) keys across a cluster of
 Linux machines.  Keys are set via the Linux 5.10+ procfs interface for
 dual keys in `/proc/sys/net/ipv4/tcp_fastopen_key` .  It requires as
 input a long-term main secret key file which is shared across the
-cluster.
+cluster (by you and/or your configuration/secret management system).
 
 This main secret is used to key a KDF function (blake2b from libsodium),
 which in turn is used with a time-based counter to rotate ephemeral TFO
@@ -45,7 +45,7 @@ it with fatal signals such as SIGTERM.
 The generated keys will only match across the cluster if both the main
 secret **and** the interval are identical on all servers.  A new primary
 ephemeral key comes into use every interval seconds.  The daemon wakes
-up and makes new writes to procs every half-interval support properly
+up and makes new writes to procfs every half-interval to support properly
 overlapping validity periods.
 
 The Linux procfs interface takes two keys as input.  The first is the
@@ -54,9 +54,9 @@ is a backup key whose cookies are also honored from TFO clients.
 
 Given "Tn" denotes the configured key interval periods, this is basically
 how the timeline of key rotations plays out, waking up to do something
-roughly 2.2 seconds (to allow some timer slop and ensure we're on the correct
+roughly 2.02 seconds (to allow some timer slop and ensure we're on the correct
 side of time comparisons) after each half-interval boundary in the unix wall
-clock time (i.e. roughly unix time % half-interval == 0):
+clock time (i.e. roughly unix time % half-interval == 2):
 
 * T0:
   * generate keys for T0 (current primary) and T-1 (what would have been the previous primary)
@@ -94,12 +94,13 @@ glibc, etc). As library dependencies, you'll also need to install developer
 versions (headers included!) of libev4 and libsodium (1.0.12 or higher).
 
 Build with: `make`
+
 Run basic tests with: `make check`
-Install with: `sudo make install bindir=/usr/bin`
-   ^ Installs just one binary, defaults to /usr/local/bin/
-   Can override via variables `prefix`, `exec_prefix`, and/or `bindir`
+
+Install with: `sudo make install bindir=/usr/bin` -- Note this installs just one binary, defaults to /usr/local/bin/ . Can override via variables `prefix`, `exec_prefix`, and/or `bindir`
+
 Run slower tests with `make check SLOW_TESTS=1`
-Run code quality checks with: `make qa`
-   ^ Note this requires several tools (valgrind, cppcheck, clang analyzer, astyle) and may only work with the local versions of these that I happen to use!  It's mostly for use during my development.
+
+Run code quality checks with: `make qa` -- Note this requires several tools (valgrind, cppcheck, clang analyzer, astyle) and may only work with the local versions of these that I happen to use!  It's mostly for use during my development.
 
 There's also a trivial example systemd unit file in the source tree as `tofurkey.service`
