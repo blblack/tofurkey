@@ -1,2 +1,8 @@
+0.2
+    Added support for systemd type=notify, to ensure dependent services
+    can rely on the keys being initially set before they start. No new
+    build dependencies, and does nothing if NOTIFY_SOCKET env var is not
+    set by systemd.  Updated example unit file to match as well.
+
 0.1
     Initial release
