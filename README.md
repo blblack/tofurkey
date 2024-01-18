@@ -27,10 +27,10 @@ it with fatal signals such as SIGTERM.
 
 ## Usage
 
-    tofurkey [-vVno] [-T n ] [-P /proc/sys/net/ipv4/tcp_fastopen_key] [-i seconds] -k /path/to/main/secret
+    tofurkey [-vVno] [-T n] [-P /proc/sys/net/ipv4/tcp_fastopen_key] [-i seconds] -k /path/to/main/secret
     -k -- REQUIRED - Path to long-term main secret file
           (must have exactly 32 bytes of secret binary data.  Will be re-read every time keys are generated!)
-    -i -- Interval seconds for key rotation, default is 21600 (6 hours), allowed range is 10 - 604800.
+    -i -- Interval seconds for key rotation, default is 21600 (6 hours), allowed range is 10 - 604800, must be even
           (daemon wakes up to rotate keys at every half-interval of unix time to manage validity overlaps)
     -v -- Verbose output to stderr
     -n -- Dry-run mode - Data is not actually written to procfs, but everything else still happens

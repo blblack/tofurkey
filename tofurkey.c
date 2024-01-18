@@ -292,10 +292,10 @@ static void sysd_notify_ready(void)
 static void usage(void)
 {
     fprintf(stderr,
-            "Usage: tofurkey [-vVno] [-T n ] [-P /proc/sys/net/ipv4/tcp_fastopen_key] [-i seconds] -k /path/to/main/secret\n\n"
+            "Usage: tofurkey [-vVno] [-T n] [-P /proc/sys/net/ipv4/tcp_fastopen_key] [-i seconds] -k /path/to/main/secret\n\n"
             "-k -- REQUIRED - Path to long-term main secret file\n"
             "      (must have exactly 32 bytes of secret binary data.  Will be re-read every time keys are generated!)\n"
-            "-i -- Interval seconds for key rotation, default is 21600 (6 hours), allowed range is 10 - 604800.\n"
+            "-i -- Interval seconds for key rotation, default is 21600 (6 hours), allowed range is 10 - 604800, must be even\n"
             "      (daemon wakes up to rotate keys at every half-interval of unix time to manage validity overlaps)\n"
             "-v -- Verbose output to stderr\n"
             "-n -- Dry-run mode - Data is not actually written to procfs, but everything else still happens\n"
@@ -333,7 +333,7 @@ static void parse_args(const int argc, char** argv, struct cfg* cfg_p)
         case 'i':
             errno = 0;
             ullval = strtoull(optarg, NULL, 10);
-            if (errno || ullval < 10LLU || ullval > 604800LLU)
+            if (errno || ullval < 10LLU || ullval > 604800LLU || ullval & 1U)
                 usage();
             cfg_p->interval = (uint64_t)ullval;
             cfg_p->half_interval = cfg_p->interval >> 1U;
