@@ -114,7 +114,7 @@ static void safe_write_procfs(char keys_ascii[static restrict TFO_ASCII_ALLOC], 
     }
 }
 
-// Convert a pair of 16 byte raw binary keys to the ASCII hexidecimal format
+// Convert a pair of 16 byte raw binary keys to the ASCII hexadecimal format
 // preferred by the Linux procfs interface
 F_NONNULL
 static void convert_keys_ascii(char keys_ascii[static restrict TFO_ASCII_ALLOC], const uint8_t kp[static restrict TFO_KEY_LEN], const uint8_t kb[static restrict TFO_KEY_LEN])

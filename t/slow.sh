@@ -37,7 +37,7 @@ fi
 #    second: B, C
 #    first: C, B
 #    second: C, D
-#    (although we can't gaurantee whether we start on "first" or "second")
+#    (although we can't guarantee whether we start on "first" or "second")
 # TODO: sort out details for reliability and write something which parses the log for these things
 # At least for now, it's useful to have sanitizers+valgrind run on this execution, even without the output testing
 
