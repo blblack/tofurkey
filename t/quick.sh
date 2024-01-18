@@ -16,13 +16,13 @@ if ! ${TEST_RUNNER} ./tofurkey -o -k t/test.key -P t/testout/fake_procfs -V -T 1
 fi
 
 # Results checks
-if ! grep -q 'procfs write: 459cc505-4ff0b44e-00836d3d-a429e2c1,de48e41f-ee7b1730-b04fc217-f6f0bd33$' t/testout/log; then
+if ! grep -q 'procfs write: 82622c1b-b09d71c9-148e70d4-1dab6d02,e6a3d0b6-f85bc3bd-e1e7e044-94299bb3$' t/testout/log; then
     echo grep check of key contents from t/testout/log failed!
     exit 42
 fi
 
 PROCFS_CONTENTS=$(cat t/testout/fake_procfs)
-if [ "${PROCFS_CONTENTS}" != "459cc505-4ff0b44e-00836d3d-a429e2c1,de48e41f-ee7b1730-b04fc217-f6f0bd33" ]; then
+if [ "${PROCFS_CONTENTS}" != "82622c1b-b09d71c9-148e70d4-1dab6d02,e6a3d0b6-f85bc3bd-e1e7e044-94299bb3" ]; then
     echo Contents of fake procfs output are wrong!
     exit 42
 fi
