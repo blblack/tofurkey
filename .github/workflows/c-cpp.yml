@@ -14,9 +14,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - name: checkout
-      uses: actions/checkout@v3
-    - name: install-deps
-      run: sudo apt -y install libev-dev libsodium-dev
+      uses: actions/checkout@latest
+    - name: install-cached-deps
+      uses: awalsh128/cache-apt-pkgs-action@latest
+      with:
+        packages: libev-dev libsodium-dev
+        version: 1.0
     - name: make
       run: make
     - name: make check
