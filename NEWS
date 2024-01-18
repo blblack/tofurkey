@@ -1,3 +1,8 @@
+0.4 - 2024-01-18
+    * Added github workflow to run basic make check on ubuntu-latest
+    * Included the commit with the updated testsuite data to match KDF
+      ctx change mentioned below (oops!).
+
 0.3 - 2024-01-18
     Mostly internal refactoring, but also changed the KDF context value
     to be the program name.  This seems more-correct, but it is a
