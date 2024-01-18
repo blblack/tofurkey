@@ -1,3 +1,7 @@
+0.5 - 2024-01-18
+    * Disallow setting an odd number as a custom interval value, as this
+      would slowly make a mess of the half-interval periodic timer.
+
 0.4 - 2024-01-18
     * Added github workflow to run basic make check on ubuntu-latest
     * Included the commit with the updated testsuite data to match KDF
