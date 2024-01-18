@@ -8,4 +8,5 @@ After=network.target
 WantedBy=multi-user.target
 
 [Service]
+Type=notify
 ExecStart=/usr/bin/tofurkey -v -k /etc/tofurkey.key
