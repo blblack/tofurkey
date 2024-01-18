@@ -1,8 +1,14 @@
-0.2
+0.3 - 2024-01-18
+    Mostly internal refactoring, but also changed the KDF context value
+    to be the program name.  This seems more-correct, but it is a
+    breaking change for key compatibility, so may as well push it out as
+    a new release quickly (we're still on day 1 here, don't sue me!).
+
+0.2 - 2024-01-18
     Added support for systemd type=notify, to ensure dependent services
     can rely on the keys being initially set before they start. No new
     build dependencies, and does nothing if NOTIFY_SOCKET env var is not
     set by systemd.  Updated example unit file to match as well.
 
-0.1
+0.1 - 2024-01-18
     Initial release
