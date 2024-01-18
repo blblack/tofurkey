@@ -1,0 +1,23 @@
+name: C/C++ CI
+env:
+  SLOW_TESTS: 1
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build-check:
+    name: Build and check
+    runs-on: ubuntu-latest
+    steps:
+    - name: checkout
+      uses: actions/checkout@v3
+    - name: install-deps
+      run: sudo apt -y install libev-dev libsodium-dev
+    - name: make
+      run: make
+    - name: make check
+      run: make check
