@@ -139,10 +139,32 @@ static uint64_t time_u64(const struct cfg* cfg_p)
     return (uint64_t)time(NULL);
 }
 
+// Detect whether "now" lands in the second (or first) half of the current
+// interval period, for switching how we manage the current "backup" key
+// written to procfs for smooth rollovers.
+static bool detect_second_half(const struct cfg* cfg_p, const uint64_t now, const uint64_t ctr_current)
+{
+    // "now_rounded_down" is the unix time exactly at the start of the current interval
+    const uint64_t now_rounded_down = ctr_current * cfg_p->interval;
+
+    // assert no overflow on the multiply above, and that the relationship is sane:
+    assert(now_rounded_down / cfg_p->interval == ctr_current);
+    assert(now >= now_rounded_down);
+
+    // leftover is how many seconds have passed since the current interval
+    // started.  This is critical for deciding how to rotate in the backup
+    // keys below.
+    const uint64_t leftover = now - now_rounded_down;
+    assert(leftover < cfg_p->interval);
+
+    return (leftover >= cfg_p->half_interval);
+}
+
 // Do the idempotent key generation + deployment
 F_NONNULL
-static void do_keys(const struct cfg* cfg_p, const uint64_t now)
+static void do_keys(const struct cfg* cfg_p)
 {
+    const uint64_t now = time_u64(cfg_p);
     log_verbose("Setting keys for unix time %" PRIu64, now);
 
     // Block all signals until we're done with security-sensitive memory
@@ -164,27 +186,12 @@ static void do_keys(const struct cfg* cfg_p, const uint64_t now)
 
     ////////
     // Interval magic to define current primary+backup keys:
-    ////////
-
     assert(cfg_p->interval >= 10U); // enforced at cfg parse time
     assert(now > cfg_p->interval); // current time is sane, should be way past interval
-
     // "ctr_current" is a counter number for how many whole intervals have passed since unix time zero
     const uint64_t ctr_current = now / cfg_p->interval;
     assert(ctr_current > 0); // ctr_current should be non-zero based on earlier asserts
-
-    // "now_rounded_down" is the unix time exactly at the start of the current interval
-    const uint64_t now_rounded_down = ctr_current * cfg_p->interval;
-
-    // assert no overflow on the multiply above, and that the relationship is sane:
-    assert(now_rounded_down / cfg_p->interval == ctr_current);
-    assert(now >= now_rounded_down);
-
-    // leftover is how many seconds have passed since the current interval
-    // started.  This is critical for deciding how to rotate in the backup
-    // keys below.
-    const uint64_t leftover = now - now_rounded_down;
-    assert(leftover < cfg_p->interval);
+    const bool second_half = detect_second_half(cfg_p, now, ctr_current);
 
     // Constant non-secret context for the KDF (like an app-specific fixed salt)
     static const char kdf_ctx[crypto_kdf_blake2b_CONTEXTBYTES] = {
@@ -197,7 +204,7 @@ static void do_keys(const struct cfg* cfg_p, const uint64_t now)
     crypto_kdf_blake2b_derive_from_key(key_primary, TFO_KEY_LEN, ctr_current, kdf_ctx, main_key);
     // If we're past the middle of the interval, define "backup" as the next upcoming key
     // else define "backup" as the previous key:
-    if (leftover >= cfg_p->half_interval) {
+    if (second_half) {
         log_verbose("... Second half of interval, so the backup is next interval key");
         crypto_kdf_blake2b_derive_from_key(key_backup, TFO_KEY_LEN, ctr_current + 1U, kdf_ctx, main_key);
     } else {
@@ -233,7 +240,7 @@ static void half_interval_cb(struct ev_loop* loop, ev_periodic* w, int revents)
     assert(w->data);
     assert(revents == EV_PERIODIC);
     const struct cfg* cfg_p = (const struct cfg*)w->data;
-    do_keys(cfg_p, time_u64(cfg_p));
+    do_keys(cfg_p);
 }
 
 static void sysd_notify_ready(void)
@@ -374,7 +381,7 @@ int main(int argc, char* argv[])
 
     // Initially set keys to whatever the current wall clock dictates, and exit
     // immediately if one-shot mode
-    do_keys(cfg_p, time_u64(cfg_p));
+    do_keys(cfg_p);
     if (cfg.one_shot) {
         log_verbose("Exiting due to one-shot mode (-o flag)");
         free(cfg_p->procfs_path);
