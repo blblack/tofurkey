@@ -7,6 +7,9 @@ DESTDIR ?= /
 prefix ?= /usr
 exec_prefix ?= $(prefix)
 bindir ?= $(exec_prefix)/bin
+datarootdir ?= $(prefix)/share
+mandir ?= $(datarootdir)/man
+man8dir ?= $(mandir)/man8
 
 .PHONY: all clean distclean check test qa install
 all: tofurkey
@@ -29,5 +32,6 @@ qa: tofurkey
 	qa/sanitizers.sh
 	@echo "===== Running tests under valgrind ... ====="
 	qa/valgrind.sh
-install: tofurkey
+install: tofurkey tofurkey.8
 	install -D -s -m 755 -t $(DESTDIR)$(bindir) tofurkey
+	install -D -m 644 -t $(DESTDIR)$(man8dir) tofurkey.8
