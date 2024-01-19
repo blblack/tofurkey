@@ -292,7 +292,7 @@ static void sysd_notify_ready(void)
 static void usage(void)
 {
     fprintf(stderr,
-            "Usage: tofurkey [-vVno] [-T n] [-P /proc/sys/net/ipv4/tcp_fastopen_key] [-i seconds] -k /path/to/main/secret\n\n"
+            "Usage: tofurkey [-vVno] [-T n] [-P /proc/sys/net/ipv4/tcp_fastopen_key] [-i seconds] -k /path/to/main/secret\n"
             "-k -- REQUIRED - Path to long-term main secret file\n"
             "      (must have exactly 32 bytes of secret binary data.  Will be re-read every time keys are generated!)\n"
             "-i -- Interval seconds for key rotation, default is 21600 (6 hours), allowed range is 10 - 604800, must be even\n"
@@ -305,6 +305,8 @@ static void usage(void)
             "-P -- Override default procfs output path for setting keys (mostly for testing)\n"
             "-T -- Set a fake unix time value which never changes (mostly for testing, min value 1000000)\n\n"
             "This is tofurkey v0.5\n"
+            "tofurkey is a tool for distributed sync of TCP Fastopen key rotations\n"
+            "More info is available at https://github.com/blblack/tofurkey\n"
            );
     exit(2);
 }

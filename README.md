@@ -1,4 +1,4 @@
-# tofurkey - Distributed sync for TCP Fastopen key rotations
+# tofurkey - a tool for distributed sync of TCP Fastopen key rotations
 
 This is a simple daemon which manages the timely, synchronized,
 deterministic rotation of TCP Fastopen (TFO) keys across a cluster of
