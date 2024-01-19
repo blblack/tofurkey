@@ -1,3 +1,8 @@
+0.6 - 2024-01-19
+    * Added a basic manpage
+    * A few documentation improvements
+    * Makefile improvements, hopefully helps packaging
+
 0.5 - 2024-01-18
     * Disallow setting an odd number as a custom interval value, as this
       would slowly make a mess of the half-interval periodic timer.
