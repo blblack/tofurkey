@@ -97,7 +97,7 @@ Build with: `make`
 
 Run basic tests with: `make check`
 
-Install with: `sudo make install`.  This installs two files by default at /usr/bin/tofurkey and /usr/share/man/man8/tofurkey.8. Can override paths via the autotools-like make variables `DESTDIR`, `prefix`, `exec_prefix`, `bindir`, `datarootdir`, `mandir`, and/or `man8dir` with their usual relationships.
+Install with: `sudo make install`.  This installs two files by default at `/usr/bin/tofurkey` and `/usr/share/man/man8/tofurkey.8`. Can override paths via the autotools-like make variables `DESTDIR`, `prefix`, `exec_prefix`, `bindir`, `datarootdir`, `mandir`, and/or `man8dir` with their usual relationships.
 
 Run slower tests with `make check SLOW_TESTS=1`
 
