@@ -97,7 +97,7 @@ Build with: `make`
 
 Run basic tests with: `make check`
 
-Install with: `sudo make install bindir=/usr/bin` -- Note this installs just one binary, defaults to /usr/local/bin/ . Can override via variables `prefix`, `exec_prefix`, and/or `bindir`
+Install with: `sudo make install` -- Note this installs just one binary into `/usr/bin/`. Can override via variables `DESTDIR`, `prefix`, `exec_prefix`, and/or `bindir`
 
 Run slower tests with `make check SLOW_TESTS=1`
 

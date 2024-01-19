@@ -1,9 +1,10 @@
 CPPFLAGS ?= -D_GNU_SOURCE
-CFLAGS ?= -std=c11 -O2 -Wall -Wextra -Wconversion -Warith-conversion -Wshadow -Warray-bounds=2 -Wcast-align=strict -Wcast-qual -Werror=vla -Wfloat-equal -Wstrict-overflow=5 -Wstrict-aliasing
+CFLAGS ?= -std=c11 -O2 -g -Wall -Wextra -Wconversion -Warith-conversion -Wshadow -Warray-bounds=2 -Wcast-align=strict -Wcast-qual -Werror=vla -Wfloat-equal -Wstrict-overflow=5 -Wstrict-aliasing
 LDFLAGS ?=
 LDLIBS ?= -lsodium -lev
 
-prefix ?= /usr/local
+DESTDIR ?= /
+prefix ?= /usr
 exec_prefix ?= $(prefix)
 bindir ?= $(exec_prefix)/bin
 
@@ -29,4 +30,4 @@ qa: tofurkey
 	@echo "===== Running tests under valgrind ... ====="
 	qa/valgrind.sh
 install: tofurkey
-	install -s -m 755 tofurkey $(bindir)/
+	install -D -s -m 755 -t $(DESTDIR)$(bindir) tofurkey
