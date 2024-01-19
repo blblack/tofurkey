@@ -1,0 +1,19 @@
+Source: tofurkey
+Section: net
+Priority: optional
+Maintainer: Brandon L Black <blblack@gmail.com>
+Build-Depends:
+ debhelper-compat (= 13),
+ libev-dev,
+ libsodium-dev,
+Standards-Version: 4.5.1
+Rules-Requires-Root: no
+Homepage: https://github.com/blblack/tofurkey
+Vcs-Browser: https://github.com/blblack/tofurkey
+Vcs-Git: https://github.com/blblack/tofurkey.git
+
+Package: tofurkey
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: Distributed sync for TCP Fastopen key rotations
+ See https://github.com/blblack/tofurkey for more details
