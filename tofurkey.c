@@ -442,13 +442,13 @@ int main(int argc, char* argv[])
     ev_run(loop, 0);
 
     // Clean up and raise terminating signal, if any
-    free(cfg_p->procfs_path);
-    free(cfg_p->main_key_path);
     ev_signal_stop(loop, &sig_hup);
     ev_signal_stop(loop, &sig_int);
     ev_signal_stop(loop, &sig_term);
     ev_periodic_stop(loop, &half_interval);
     ev_loop_destroy(loop);
+    free(cfg_p->main_key_path);
+    free(cfg_p->procfs_path);
     if (killed_by)
         raise(killed_by);
     return 0;
