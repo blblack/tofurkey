@@ -153,6 +153,11 @@ static bool detect_second_half(const struct cfg* cfg_p, const uint64_t now, cons
     return (leftover >= cfg_p->half_interval);
 }
 
+// Constant non-secret context for the KDF (like an app-specific fixed salt)
+static const char kdf_ctx[crypto_kdf_blake2b_CONTEXTBYTES] = {
+    't', 'o', 'f', 'u', 'r', 'k', 'e', 'y'
+};
+
 // Do the idempotent key generation + deployment
 F_NONNULL
 static void do_keys(const struct cfg* cfg_p)
@@ -185,11 +190,6 @@ static void do_keys(const struct cfg* cfg_p)
     const uint64_t ctr_current = now / cfg_p->interval;
     assert(ctr_current > 0); // ctr_current should be non-zero based on earlier asserts
     const bool second_half = detect_second_half(cfg_p, now, ctr_current);
-
-    // Constant non-secret context for the KDF (like an app-specific fixed salt)
-    static const char kdf_ctx[crypto_kdf_blake2b_CONTEXTBYTES] = {
-        't', 'o', 'f', 'u', 'r', 'k', 'e', 'y'
-    };
 
     // Now read in the long-term main key file and generate our pair of ephemeral keys:
     safe_read_keyfile(cfg_p->main_key_path, main_key);
