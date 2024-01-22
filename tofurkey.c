@@ -204,13 +204,8 @@ static void do_keys(const struct cfg* cfg_p)
     crypto_kdf_blake2b_derive_from_key(key_primary, TFO_KEY_LEN, ctr_current, kdf_ctx, main_key);
     // If we're past the middle of the interval, define "backup" as the next upcoming key
     // else define "backup" as the previous key:
-    if (second_half) {
-        log_verbose("... Second half of interval, so the backup is next interval key");
-        crypto_kdf_blake2b_derive_from_key(key_backup, TFO_KEY_LEN, ctr_current + 1U, kdf_ctx, main_key);
-    } else {
-        log_verbose("... First half of interval, so the backup is the previous interval key");
-        crypto_kdf_blake2b_derive_from_key(key_backup, TFO_KEY_LEN, ctr_current - 1U, kdf_ctx, main_key);
-    }
+    const uint64_t ctr_backup = second_half ? ctr_current + 1U : ctr_current - 1U;
+    crypto_kdf_blake2b_derive_from_key(key_backup, TFO_KEY_LEN, ctr_backup, kdf_ctx, main_key);
 
     // Wipe keys as we stop needing them from here down:
     sodium_free(main_key);
