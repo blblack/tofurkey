@@ -144,12 +144,9 @@ static bool detect_second_half(const struct cfg* cfg_p, const uint64_t now, cons
     assert(now_rounded_down / cfg_p->interval == ctr_current);
     assert(now >= now_rounded_down);
 
-    // leftover is how many seconds have passed since the current interval
-    // started.  This is critical for deciding how to rotate in the backup
-    // keys below.
+    // Which half is determined by the time that has passed since now_rounded_down
     const uint64_t leftover = now - now_rounded_down;
     assert(leftover < cfg_p->interval);
-
     return (leftover >= cfg_p->half_interval);
 }
 
@@ -187,13 +184,12 @@ static void do_keys(const struct cfg* cfg_p)
     if (!main_key)
         log_fatal("sodium_malloc() failed: %s", strerror(errno));
 
-    ////////
-    // Interval magic to define current primary+backup keys:
+    // "ctr_current" is a counter number for how many whole intervals have
+    // passed since unix time zero, and relies on the sanity checks here:
     assert(cfg_p->interval >= 10U); // enforced at cfg parse time
     assert(now > cfg_p->interval); // current time is sane, should be way past interval
-    // "ctr_current" is a counter number for how many whole intervals have passed since unix time zero
     const uint64_t ctr_current = now / cfg_p->interval;
-    assert(ctr_current > 0); // ctr_current should be non-zero based on earlier asserts
+    assert(ctr_current > 0);
     const bool second_half = detect_second_half(cfg_p, now, ctr_current);
 
     // Now read in the long-term main key file and generate our pair of ephemeral keys:
@@ -309,7 +305,7 @@ static void parse_args(const int argc, char** argv, struct cfg* cfg_p)
 {
     // Basic defaults:
     cfg_p->procfs_path = strdup("/proc/sys/net/ipv4/tcp_fastopen_key");
-    cfg_p->interval = 21600U; // default for optional value here
+    cfg_p->interval = 21600U;
     cfg_p->half_interval = cfg_p->interval >> 1U;
 
     int optchar;
