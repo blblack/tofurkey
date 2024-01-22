@@ -143,13 +143,13 @@ static void convert_keys_ascii(char keys_ascii[static restrict TFO_ASCII_ALLOC],
 // Detect whether "now" lands in the second (or first) half of the current
 // interval period, for switching how we manage the current "backup" key
 // written to procfs for smooth rollovers.
-static bool detect_second_half(const struct cfg* cfg_p, const uint64_t now, const uint64_t ctr_current)
+static bool detect_second_half(const struct cfg* cfg_p, const uint64_t now, const uint64_t ctr_primary)
 {
     // "now_rounded_down" is the unix time exactly at the start of the current interval
-    const uint64_t now_rounded_down = ctr_current * cfg_p->interval;
+    const uint64_t now_rounded_down = ctr_primary * cfg_p->interval;
 
     // assert no overflow on the multiply above, and that the relationship is sane:
-    assert(now_rounded_down / cfg_p->interval == ctr_current);
+    assert(now_rounded_down / cfg_p->interval == ctr_primary);
     assert(now >= now_rounded_down);
 
     // Which half is determined by the time that has passed since now_rounded_down
@@ -192,21 +192,21 @@ static void do_keys(const struct cfg* cfg_p)
     if (!main_key)
         log_fatal("sodium_malloc() failed: %s", strerror(errno));
 
-    // "ctr_current" is a counter number for how many whole intervals have
+    // "ctr_primary" is a counter number for how many whole intervals have
     // passed since unix time zero, and relies on the sanity checks here:
     assert(cfg_p->interval >= 10U); // enforced at cfg parse time
     assert(now > cfg_p->interval); // current time is sane, should be way past interval
-    const uint64_t ctr_current = now / cfg_p->interval;
-    assert(ctr_current > 0);
-    const bool second_half = detect_second_half(cfg_p, now, ctr_current);
+    const uint64_t ctr_primary = now / cfg_p->interval;
+    assert(ctr_primary > 0);
+    const bool second_half = detect_second_half(cfg_p, now, ctr_primary);
 
     // Now read in the long-term main key file and generate our pair of ephemeral keys:
     safe_read_keyfile(cfg_p->main_key_path, main_key);
     // primary key is always the one for the current interval:
-    crypto_kdf_blake2b_derive_from_key(key_primary, TFO_KEY_LEN, ctr_current, kdf_ctx, main_key);
+    crypto_kdf_blake2b_derive_from_key(key_primary, TFO_KEY_LEN, ctr_primary, kdf_ctx, main_key);
     // If we're past the middle of the interval, define "backup" as the next upcoming key
     // else define "backup" as the previous key:
-    const uint64_t ctr_backup = second_half ? ctr_current + 1U : ctr_current - 1U;
+    const uint64_t ctr_backup = second_half ? ctr_primary + 1U : ctr_primary - 1U;
     crypto_kdf_blake2b_derive_from_key(key_backup, TFO_KEY_LEN, ctr_backup, kdf_ctx, main_key);
 
     // Wipe keys as we stop needing them from here down:
