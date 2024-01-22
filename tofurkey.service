@@ -3,6 +3,7 @@
 Description=tofurkey
 After=local-fs.target
 After=network.target
+After=time-sync.target
 
 [Install]
 WantedBy=multi-user.target
