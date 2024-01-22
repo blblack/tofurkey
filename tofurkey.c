@@ -132,13 +132,6 @@ static void convert_keys_ascii(char keys_ascii[static restrict TFO_ASCII_ALLOC],
 #undef H8_
 }
 
-static uint64_t time_u64(const struct cfg* cfg_p)
-{
-    if (cfg_p->fake_time)
-        return cfg_p->fake_time;
-    return (uint64_t)time(NULL);
-}
-
 // Detect whether "now" lands in the second (or first) half of the current
 // interval period, for switching how we manage the current "backup" key
 // written to procfs for smooth rollovers.
@@ -164,7 +157,7 @@ static bool detect_second_half(const struct cfg* cfg_p, const uint64_t now, cons
 F_NONNULL
 static void do_keys(const struct cfg* cfg_p)
 {
-    const uint64_t now = time_u64(cfg_p);
+    const uint64_t now = cfg_p->fake_time ? cfg_p->fake_time : (uint64_t)time(NULL);
     log_verbose("Setting keys for unix time %" PRIu64, now);
 
     // Block all signals until we're done with security-sensitive memory
