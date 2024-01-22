@@ -41,6 +41,10 @@
     exit(42);\
 } while(0)
 
+#define log_info(fmt_, ...) do {\
+    fprintf(stderr, fmt_ "\n", ##__VA_ARGS__);\
+} while(0)
+
 #define log_verbose(fmt_, ...) do {\
     if (cfg_p->verbose)\
         fprintf(stderr, fmt_ "\n", ##__VA_ARGS__);\
@@ -160,7 +164,7 @@ F_NONNULL
 static void do_keys(const struct cfg* cfg_p)
 {
     const uint64_t now = cfg_p->fake_time ? cfg_p->fake_time : (uint64_t)time(NULL);
-    log_verbose("Setting keys for unix time %" PRIu64, now);
+    log_info("Setting keys for unix time %" PRIu64, now);
 
     // Block all signals until we're done with security-sensitive memory
     sigset_t sigmask_all;
@@ -374,7 +378,7 @@ int main(int argc, char* argv[])
     // immediately if one-shot mode
     do_keys(cfg_p);
     if (cfg.one_shot) {
-        log_verbose("Exiting due to one-shot mode (-o flag)");
+        log_info("Exiting due to one-shot mode (-o flag)");
         free(cfg_p->procfs_path);
         free(cfg_p->main_key_path);
         return 0;
