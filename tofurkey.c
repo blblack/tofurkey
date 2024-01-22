@@ -67,6 +67,10 @@
 _Static_assert(crypto_kdf_blake2b_CONTEXTBYTES == 8U, "b2b has 8 ctx bytes");
 _Static_assert(crypto_kdf_blake2b_KEYBYTES == 32U, "b2b has 32 key bytes");
 
+// This is set by the signal handler for terminal signals, and consumed as the
+// correct signal to re-raise for final termination
+static int killed_by = 0;
+
 // Structure carrying fixed configuration from CLI down to functional parts
 struct cfg {
     char* main_key_path;
@@ -236,6 +240,17 @@ static void half_interval_cb(struct ev_loop* loop, ev_periodic* w, int revents)
     do_keys(cfg_p);
 }
 
+F_NONNULL
+static void terminal_signal_cb(struct ev_loop* loop, struct ev_signal* w, const int revents)
+{
+    assert(loop);
+    assert(w->signum == SIGTERM || w->signum == SIGINT || w->signum == SIGHUP);
+    assert(revents == EV_SIGNAL);
+    log_info("Exiting cleanly on receipt of terminating signal %i", w->signum);
+    killed_by = w->signum;
+    ev_break(loop, EVBREAK_ALL);
+}
+
 static void sysd_notify_ready(void)
 {
     const char* spath = getenv("NOTIFY_SOCKET");
@@ -393,8 +408,9 @@ int main(int argc, char* argv[])
 
     // create default ev loop
     // (note: the libev dependency seems like overkill just to run a single
-    // periodic timer, but running such a timer accurately over a long period
-    // of time is actually quite tricky, so this saves a bunch of headache).
+    // periodic timer and handle death signals, but running such a timer
+    // accurately over a long period of time is actually quite tricky, so this
+    // saves a bunch of headache).
     struct ev_loop* loop = ev_default_loop(EVFLAG_AUTO);
     if (!loop)
         log_fatal("Could not initialize the default libev loop");
@@ -410,14 +426,30 @@ int main(int argc, char* argv[])
     half_interval.data = (void*)cfg_p;
     ev_periodic_start(loop, &half_interval);
 
+    // terminal signal handlers
+    ev_signal sig_term;
+    ev_signal_init(&sig_term, terminal_signal_cb, SIGTERM);
+    ev_signal_start(loop, &sig_term);
+    ev_signal sig_int;
+    ev_signal_init(&sig_int, terminal_signal_cb, SIGINT);
+    ev_signal_start(loop, &sig_int);
+    ev_signal sig_hup;
+    ev_signal_init(&sig_hup, terminal_signal_cb, SIGHUP);
+    ev_signal_start(loop, &sig_hup);
+
     // We spend all our runtime hanging out here until something kills us
     log_verbose("Entering runtime loop with interval value %" PRIu64 " (will wake up to rotate keys ~2s after each time the unix timestamp is evenly divisible by %" PRIu64 ")", cfg_p->interval, cfg_p->half_interval);
     ev_run(loop, 0);
 
-    // by design, there is no way to cleanly exit the loop other than killing
-    // the daemon with a terminal signal, so the code below never actually gets
-    // run, it's just here for cleanliness, completeness, and future-proofing.
+    // Clean up and raise terminating signal, if any
     free(cfg_p->procfs_path);
     free(cfg_p->main_key_path);
+    ev_signal_stop(loop, &sig_hup);
+    ev_signal_stop(loop, &sig_int);
+    ev_signal_stop(loop, &sig_term);
+    ev_periodic_stop(loop, &half_interval);
+    ev_loop_destroy(loop);
+    if (killed_by)
+        raise(killed_by);
     return 0;
 }
