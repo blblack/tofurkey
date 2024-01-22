@@ -1,3 +1,15 @@
+0.7 - 2024-01-22
+    * The slow tests (make test SLOW_TESTS=1) now utilize a small python script
+      and the python nacl module to actually validate the calculated TFO keys
+      and their timing.
+    * The example systemd unit now has After=time-sync.target
+    * Some of the -v verbose output is less-verbose than before
+    * The format of the leaky verbose lines with keys in them changed slightly
+      (it now includes the generation time)
+    * The daemon now outputs at least one line noting the time every time a new
+      set of keys is generated, even in non-verbose mode.
+    * Internal refactoring for code clarity
+
 0.6 - 2024-01-19
     * Added a basic manpage
     * A few documentation improvements

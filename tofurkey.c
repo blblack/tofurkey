@@ -312,7 +312,7 @@ static void usage(void)
             "-V -- Verbose and also print TFO keys (mostly for testing, this leaks short-term secrets to stderr!)\n"
             "-P -- Override default procfs output path for setting keys (mostly for testing)\n"
             "-T -- Set a fake unix time value which never changes (mostly for testing, min value 1000000)\n\n"
-            "This is tofurkey v0.6\n"
+            "This is tofurkey v0.7\n"
             "tofurkey is a tool for distributed sync of TCP Fastopen key rotations\n"
             "More info is available at https://github.com/blblack/tofurkey\n"
            );
