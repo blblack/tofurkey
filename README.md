@@ -99,8 +99,8 @@ Run basic tests with: `make check`
 
 Install with: `sudo make install`.  This installs two files by default at `/usr/bin/tofurkey` and `/usr/share/man/man8/tofurkey.8`. Can override paths via the autotools-like make variables `DESTDIR`, `prefix`, `exec_prefix`, `bindir`, `datarootdir`, `mandir`, and/or `man8dir` with their usual relationships.
 
-Run slower tests with `make check SLOW_TESTS=1`
+Run slower tests with `make check SLOW_TESTS=1` (requires python3, and the "nacl" python module)
 
-Run code quality checks with: `make qa` -- Note this requires several tools (valgrind, cppcheck, clang analyzer, astyle) and may only work with the local versions of these that I happen to use!  It's mostly for use during my development.
+Run code quality checks with: `make qa` -- Note this requires several more tools (valgrind, cppcheck, clang analyzer, astyle) and may only work with the local versions of these that I happen to use!  It's mostly for use during my development.
 
 There's also a trivial example systemd unit file in the source tree as `tofurkey.service`
