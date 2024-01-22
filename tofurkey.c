@@ -175,11 +175,16 @@ static void do_keys(const struct cfg* cfg_p)
 
     // Allocate storage for various keys in various forms:
     char* keys_ascii = sodium_malloc(TFO_ASCII_ALLOC);
+    if (!keys_ascii)
+        log_fatal("sodium_malloc() failed: %s", strerror(errno));
     uint8_t* key_backup = sodium_malloc(TFO_KEY_LEN);
+    if (!key_backup)
+        log_fatal("sodium_malloc() failed: %s", strerror(errno));
     uint8_t* key_primary = sodium_malloc(TFO_KEY_LEN);
+    if (!key_primary)
+        log_fatal("sodium_malloc() failed: %s", strerror(errno));
     uint8_t* main_key = sodium_malloc(crypto_kdf_blake2b_KEYBYTES);
-
-    if (!keys_ascii || !key_backup || !key_primary || !main_key)
+    if (!main_key)
         log_fatal("sodium_malloc() failed: %s", strerror(errno));
 
     ////////
