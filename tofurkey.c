@@ -215,7 +215,7 @@ static void do_keys(const struct cfg* cfg_p)
     sodium_free(key_primary);
     sodium_free(key_backup);
 
-    log_verbose_leaky("... Generated ASCII TFO keys for procfs write: %s", keys_ascii);
+    log_verbose_leaky("... Generated ASCII TFO keys for procfs write: [%" PRIu64 "] %s", now, keys_ascii);
     if (cfg_p->dry_run) {
         log_verbose("... Not writing to procfs because dry-run was specified (-n)");
     } else {
