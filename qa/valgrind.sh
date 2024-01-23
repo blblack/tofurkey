@@ -6,7 +6,7 @@ fi
 set -x
 set -e
 CFLAGS="-O0 -g" make clean all
-TEST_RUNNER="valgrind --error-exitcode=99 --leak-check=full" make check SLOW_TESTS=1
+TEST_RUNNER="valgrind --error-exitcode=99 --leak-check=full --show-leak-kinds=all" make check SLOW_TESTS=1
 set +e
 set +x
 if grep "ERROR SUM" t/testout/log | grep -v ' 0 errors'; then
