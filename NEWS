@@ -1,3 +1,17 @@
+0.8 - 2024-01-23
+    * Made "-k" optional rather than required.  When -k is not specified, the
+      daemon attempts to auto-generate a local random key and persist it to
+      the run directory for future use.  This mode of operation is only useful
+      to get smoothly rotated keys on a single host; it cannot help you with
+      synchronization across a cluster.
+    * New option "-a" allows overriding the default path the autokey is stored
+      to on disk (no effect if -k is used).
+    * Moved the default installation directory for the main binary to
+      /usr/sbin instead of /usr/bin
+    * Updated example systemd unit to use sbin and no arguments, which means
+      default autokeying.  This allows it to be deployed from distro packaging
+      successfully without human intervention to e.g. deploy a real key.
+
 0.7 - 2024-01-22
     * The slow tests (make test SLOW_TESTS=1) now utilize a small python script
       and the python nacl module to actually validate the calculated TFO keys
