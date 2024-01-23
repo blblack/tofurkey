@@ -398,6 +398,8 @@ static void autokey_setup(struct cfg* cfg_p)
     log_info("Could not read autokey file %s, generating a new random one",
              cfg_p->main_key_path);
     main_key = sodium_malloc(crypto_kdf_blake2b_KEYBYTES);
+    if (!main_key)
+        log_fatal("sodium_malloc() failed: %s", strerror(errno));
     randombytes_buf(main_key, crypto_kdf_blake2b_KEYBYTES);
     safe_write_autokey(main_key, cfg_p->autokey_path);
     sodium_free(main_key);
