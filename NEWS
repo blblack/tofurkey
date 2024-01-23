@@ -1,3 +1,7 @@
+0.9 - 2024-01-23
+    * Minor fixup to Makefile CPPFLAGS handling, so that critical defines are
+      not lost when package build systems set their own CPPFLAGS.
+
 0.8 - 2024-01-23
     * Made "-k" optional rather than required.  When -k is not specified, the
       daemon attempts to auto-generate a local random key and persist it to
