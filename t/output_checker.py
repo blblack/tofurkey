@@ -1,14 +1,17 @@
 #!/usr/bin/env python3
 
+"""This is a helper script for the tofurkey testsuite"""
 import re
 import struct
-import nacl.hashlib
 import pathlib
+import nacl.hashlib
 
 
-# Python's nacl bindings don't offer "crypto_kdf_blake2b_derive_from_key()",
-# so we're reimplementing that here, but hardcoded for our exact use-case:
 def kdf_blake2b_derive16_from_key(subkey_id, main_key):
+    """
+    Python's nacl bindings don't offer "crypto_kdf_blake2b_derive_from_key()",
+    so we're reimplementing that here, but hardcoded for our exact use-case:
+    """
     sksalt = struct.pack("<QQ", subkey_id, 0)
     persctx = b"tofurkey\0\0\0\0\0\0\0\0"
     return nacl.hashlib.blake2b(
@@ -17,6 +20,7 @@ def kdf_blake2b_derive16_from_key(subkey_id, main_key):
 
 
 def validate_keys(interval, main_key, key_time, key_primary, key_backup):
+    """Actual comparison of expected cryptographic key contents"""
     ctr_primary, leftover = divmod(key_time, interval)
     if leftover >= (interval >> 1):
         ctr_backup = ctr_primary + 1
@@ -25,25 +29,28 @@ def validate_keys(interval, main_key, key_time, key_primary, key_backup):
 
     cmp_primary = kdf_blake2b_derive16_from_key(ctr_primary, main_key)
     if key_primary != cmp_primary:
-        raise Exception(
+        raise ValueError(
             f"Test Failed primary key comparison - time: {key_time!s}"
             f" expected: {cmp_primary!a} got: {key_primary!a}"
         )
     cmp_backup = kdf_blake2b_derive16_from_key(ctr_backup, main_key)
     if key_backup != cmp_backup:
-        raise Exception(
+        raise ValueError(
             f"Test Failed backup key comparison - time: {key_time!s}"
             f" expected: {cmp_backup!a} got: {key_backup!a}"
         )
 
 
 def parse_key(key_ascii):
+    """Converts procfs style ascii TFO key to raw bytearray"""
     return bytearray.fromhex(key_ascii.replace("-", ""))
 
 
 def main():
-    # These could be parameterized, but for now they're just fixed to match
-    # the slow test's own hardcoded values
+    """
+    The values below could be parameterized, but for now they're just fixed to
+    match the slow test's own hardcoded values
+    """
     interval = 10
     key_path = "t/test.key"
     log_path = "t/testout/log"
@@ -55,7 +62,7 @@ def main():
     )
     count = 0
     key_times = []
-    with open(log_path, "r") as log_file:
+    with open(log_path, encoding="ascii") as log_file:
         for line in log_file.readlines():
             result = tfo_re.search(line)
             if result:
@@ -75,14 +82,14 @@ def main():
     # natural timing.  The first periodic one should be %5==2, and the
     # remaining ones should be 5 seconds apart:
     if count < 5:
-        raise Exception(
+        raise ValueError(
             f"Expected at least 5 total key output lines, got only {count!s}"
         )
     if key_times[1] % 5 != 2:
-        raise Exception(f"First periodic key time {key_times[1]!s} % 5 != 2")
+        raise ValueError(f"First periodic key time {key_times[1]!s} % 5 != 2")
     for k in range(1, count - 1):
         if key_times[k + 1] - key_times[k] != 5:
-            raise Exception(f"Key times not exactly 5 seconds apart")
+            raise ValueError("Key times not exactly 5 seconds apart")
     print(f"OK: {count!s} key outputs are correct")
 
 
