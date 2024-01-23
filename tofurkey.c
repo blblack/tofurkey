@@ -137,7 +137,7 @@ static void safe_write_procfs(char keys_ascii[static restrict TFO_ASCII_ALLOC], 
 F_NONNULL
 static void safe_write_autokey(uint8_t main_key[static restrict crypto_kdf_blake2b_KEYBYTES], const char* restrict autokey_path)
 {
-    const int autokey_fd = open(autokey_path, O_CLOEXEC | O_WRONLY | O_CREAT | O_TRUNC, S_IRUSR);
+    const int autokey_fd = open(autokey_path, O_CLOEXEC | O_WRONLY | O_CREAT | O_TRUNC | O_SYNC, S_IRUSR);
     if (autokey_fd < 0) {
         sodium_free(main_key);
         log_fatal("open(%s) failed: %s", autokey_path, strerror(errno));
