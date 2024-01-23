@@ -10,4 +10,4 @@ WantedBy=multi-user.target
 
 [Service]
 Type=notify
-ExecStart=/usr/bin/tofurkey -v -k /etc/tofurkey.key
+ExecStart=/usr/sbin/tofurkey -v -k /etc/tofurkey.key
