@@ -21,7 +21,7 @@ check: tofurkey
 	t/quick.sh
 	@if [ "$(SLOW_TESTS)"x != x ]; then t/slow.sh; fi
 test: check
-qa: tofurkey
+qa: tofurkey check
 	@echo "===== Enforcing style (may alter source!) ... ====="
 	qa/style.sh
 	@echo "===== Running cppcheck ... ====="
