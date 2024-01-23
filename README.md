@@ -3,9 +3,16 @@
 This is a simple daemon which manages the timely, synchronized,
 deterministic rotation of TCP Fastopen (TFO) keys across a cluster of
 Linux machines.  Keys are set via the Linux 5.10+ procfs interface for
-dual keys in `/proc/sys/net/ipv4/tcp_fastopen_key` .  It requires as
-input a long-term main secret key file which is shared across the
-cluster (by you and/or your configuration/secret management system).
+dual keys in `/proc/sys/net/ipv4/tcp_fastopen_key` .  In order to
+synchronize across a cluster, it requires as input a long-term main
+secret key file which is shared across the cluster (by you and/or your
+configuration/secret management system), set via the `-k` argument.
+
+If this is not supplied, a random secret will be auto-generated and
+persisted to the (reboot-volatile) rundir by default, which will allow
+for local TFO key rotation without any synchronization or reboot
+persistence.  A warning will be issued to stderr at startup in this
+case, as it's not expected to be a common operating mode in production.
 
 This main secret is used to key a KDF function (blake2b from libsodium),
 which in turn is used with a time-based counter to rotate ephemeral TFO
@@ -27,18 +34,31 @@ it with fatal signals such as SIGTERM.
 
 ## Usage
 
-    tofurkey [-vVno] [-T n] [-P /proc/sys/net/ipv4/tcp_fastopen_key] [-i seconds] -k /path/to/main/secret
-    -k -- REQUIRED - Path to long-term main secret file
-          (must have exactly 32 bytes of secret binary data.  Will be re-read every time keys are generated!)
-    -i -- Interval seconds for key rotation, default is 21600 (6 hours), allowed range is 10 - 604800, must be even
-          (daemon wakes up to rotate keys at every half-interval of unix time to manage validity overlaps)
+    tofurkey [-vVno] [-T n] [-P /proc/sys/net/ipv4/tcp_fastopen_key]
+             [-i seconds] [-a /auto/key/filename] [-k /path/to/main/secret]
+    -k -- Path to long-term main secret file.  Without this, the daemon will
+          attempt to persist an automatic key to the rundir on startup, but
+          this affords no possibility of distribute sync across a cluster, and
+          may be regenerated after e.g. reboots as well. This file must have
+          exactly 32 bytes of secret binary data, and will be re-read every
+          time runtime TFO keys are generated!
+    -a -- Filename to persist an auto-generated key, if -k is not used.
+          Defaults to "/run/tofurkey.autokey".
+    -i -- Interval seconds for key rotation, default is 21600 (6 hours),
+          allowed range is 10 - 604800, must be even (daemon wakes up to rotate
+          keys at every half-interval of unix time to manage validity overlaps)
     -v -- Verbose output to stderr
-    -n -- Dry-run mode - Data is not actually written to procfs, but everything else still happens
-    -o -- One-shot mode - it will calculate the current keys and set them once and then exit.
-          (normal mode is to remain running and rotate keys on timer intervals forever)
-    -V -- Verbose and also print TFO keys (mostly for testing, this leaks short-term secrets to stderr!)
-    -P -- Override default procfs output path for setting keys (mostly for testing)
-    -T -- Set a fake unix time value which never changes (mostly for testing, min value 1000000)
+    -n -- Dry-run mode - Data is not actually written to procfs, but everything
+          else still happens
+    -o -- One-shot mode - it will calculate the current keys and set them once
+          and then exit. (normal mode is to remain running and rotate keys on
+          timer intervals forever)
+    -V -- Verbose and also print TFO keys (mostly for testing, this leaks
+          short-term secrets to stderr!)
+    -P -- Override default procfs output path for setting keys (mostly for
+          testing)
+    -T -- Set a fake unix time value which never changes (mostly for testing,
+          min value 1000000)
 
 ## Operational details about timing
 

@@ -1,8 +1,3 @@
-CPPFLAGS ?= -D_GNU_SOURCE
-CFLAGS ?= -std=c11 -O2 -g -Wall -Wextra -Wconversion -Warith-conversion -Wshadow -Warray-bounds=2 -Wcast-align=strict -Wcast-qual -Werror=vla -Wfloat-equal -Wstrict-overflow=5 -Wstrict-aliasing
-LDFLAGS ?=
-LDLIBS ?= -lsodium -lev
-
 DESTDIR ?=
 prefix ?= /usr
 exec_prefix ?= $(prefix)
@@ -10,6 +5,12 @@ sbindir ?= $(exec_prefix)/sbin
 datarootdir ?= $(prefix)/share
 mandir ?= $(datarootdir)/man
 man8dir ?= $(mandir)/man8
+rundir ?= /run
+
+CPPFLAGS ?= -D_GNU_SOURCE -DRUNDIR="\"$(rundir)\""
+CFLAGS ?= -std=c11 -O2 -g -Wall -Wextra -Wconversion -Warith-conversion -Wshadow -Warray-bounds=2 -Wcast-align=strict -Wcast-qual -Werror=vla -Wfloat-equal -Wstrict-overflow=5 -Wstrict-aliasing
+LDFLAGS ?=
+LDLIBS ?= -lsodium -lev
 
 .PHONY: all clean distclean check test qa install
 all: tofurkey
