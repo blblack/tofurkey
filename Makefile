@@ -3,7 +3,7 @@ CFLAGS ?= -std=c11 -O2 -g -Wall -Wextra -Wconversion -Warith-conversion -Wshadow
 LDFLAGS ?=
 LDLIBS ?= -lsodium -lev
 
-DESTDIR ?= /
+DESTDIR ?=
 prefix ?= /usr
 exec_prefix ?= $(prefix)
 bindir ?= $(exec_prefix)/bin
