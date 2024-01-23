@@ -8,10 +8,18 @@ tofurkey \- Distributed sync for TCP Fastopen key rotations
 \fBtofurkey\fR is a simple daemon which manages the timely,
 synchronized, deterministic rotation of TCP Fastopen (TFO) keys across a
 cluster of Linux machines.  Keys are set via the Linux 5.10+ procfs
-interface for dual keys in \fI/proc/sys/net/ipv4/tcp_fastopen_key\fR. It
-requires as input a long-term main secret key file which is shared
-across the cluster (by you and/or your configuration/secret management
-system).
+interface for dual keys in \fI/proc/sys/net/ipv4/tcp_fastopen_key\fR.
+
+In order to synchronize across a cluster, it requires as input a
+long-term main secret key file which is shared across the cluster (by
+you and/or your configuration/secret management system), set via the
+`-k` argument.
+
+If this is not supplied, a random secret will be auto-generated and
+persisted to the (reboot-volatile) rundir by default, which will allow
+for local TFO key rotation without any synchronization or reboot
+persistence.  A warning will be issued to stderr at startup in this
+case, as it's not expected to be a common operating mode in production.
 .SH OPTIONS
 .TP
 \fB-k\fR
