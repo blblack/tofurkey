@@ -43,7 +43,7 @@
 
 #define log_fatal(fmt_, ...) do {\
     fprintf(stderr, "FATAL: " fmt_ "\n", ##__VA_ARGS__);\
-    exit(42);\
+    abort();\
 } while(0)
 
 #define log_info(fmt_, ...) do {\
