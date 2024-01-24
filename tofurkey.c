@@ -365,7 +365,7 @@ static void sysd_notify_ready(const char* spath)
         .msg_namelen = sun_len
     };
 
-    ssize_t sm_rv = sendmsg(fd, &m, 0);
+    ssize_t sm_rv = sendmsg(fd, &m, MSG_NOSIGNAL);
     if (sm_rv < 0)
         log_fatal("sendmsg() to systemd NOTIFY_SOCKET failed: %s", strerror(errno));
 
