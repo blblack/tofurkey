@@ -13,11 +13,10 @@ LDLIBS ?= -lsodium -lev
 
 .PHONY: all clean distclean check test qa install
 all: tofurkey
-rundir.inc:
-	@echo "// Dynamically created via Makefile" >$@
-	@echo "#define RUNDIR \"$(rundir)\"" >>$@
-tofurkey.c: rundir.inc
-tofurkey: tofurkey.c
+rundir.inc: Makefile
+	echo "// Dynamically created by make\n#define RUNDIR \"$(rundir)\"" >$@
+tofurkey: tofurkey.c rundir.inc Makefile
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) $(filter %.c,$^) $(LDLIBS) -o $@
 clean:
 	$(RM) rundir.inc
 	$(RM) tofurkey
