@@ -22,7 +22,7 @@ clean:
 	$(RM) tofurkey
 distclean: clean
 check: tofurkey
-	t/quick.sh
+	@t/quick.sh
 	@if [ "$(SLOW_TESTS)"x != x ]; then t/slow.sh; fi
 test: check
 qa: tofurkey check
