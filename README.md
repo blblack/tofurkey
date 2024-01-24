@@ -72,7 +72,7 @@ generated securely.  Exactly 32 bytes will be read from it.  It is up to
 you how you securely generate and distribute such a key across your
 cluster.  One trivial way to create a decent one is:
 
-    dd if=/dev/urandom of=/path/to/main.key bs=1 count=32
+    dd if=/dev/random of=/path/to/main.key bs=32 count=1
 
 Note that the key is re-read from disk on every half-interval wakeup.
 Because of this, it is possible to replace your main key with a new one
