@@ -3,27 +3,31 @@
 This is a simple daemon which manages the timely, synchronized,
 deterministic rotation of TCP Fastopen (TFO) keys across a cluster of
 Linux machines.  Keys are set via the Linux 5.10+ procfs interface for
-dual keys in `/proc/sys/net/ipv4/tcp_fastopen_key` .  In order to
-synchronize across a cluster, it requires as input a long-term main
-secret key file which is shared across the cluster (by you and/or your
-configuration/secret management system), set via the `-k` argument.
+dual keys in `/proc/sys/net/ipv4/tcp_fastopen_key` .
 
-If this is not supplied, a random secret will be auto-generated and
+In order to synchronize across a cluster, it requires as input a
+long-term main secret key file which is shared across the cluster (by
+you and/or your configuration/secret management system), set via the
+`-k` argument, which points at a secret file with at least 32 bytes of
+high-entropy random data to use as a main key.
+
+If `-k` is not supplied, a random secret will be auto-generated and
 persisted to the (reboot-volatile) rundir by default, which will allow
 for local TFO key rotation without any synchronization or reboot
 persistence.  A warning will be issued to stderr at startup in this
 case, as it's not expected to be a common operating mode in production.
 
-This main secret is used to key a KDF function (blake2b from libsodium),
-which in turn is used with a time-based counter to rotate ephemeral TFO
-keys supplied to the kernel.  Old keys are honored for a while after
-generating a new primary key, and upcoming keys are honored for a while
-before they become the new primary key, and therefore the time
-transitions should be smooth for clients which are reconnecting
-regularly and/or crossing between cluster machines with loose time sync.
-So long as NTP is keeping your servers at least roughly in sync, and
-they all independently run "tofurkey" with the same interval argument
-and main secret key contents, your TFO clients should remain happy.
+The main secret is used as input to a key derivation function (blake2b
+from libsodium), which in turn is used with a time-based counter to
+rotate ephemeral TFO keys supplied to the kernel.  Old keys are honored
+for a while after generating a new primary key, and upcoming keys are
+honored for a while before they become the new primary key, and
+therefore the time transitions should be smooth for clients which are
+reconnecting regularly and/or crossing between cluster machines with
+loose time sync. So long as NTP is keeping your servers at least roughly
+in sync, and they all independently run "tofurkey" with the same
+interval argument and main secret key contents, your TFO clients should
+remain happy.
 
 All operations of this daemon are idempotent given identical system
 times, main keys, and arguments.  I use the term "daemon" loosely here -
@@ -36,12 +40,12 @@ it with fatal signals such as SIGTERM.
 
     tofurkey [-vVno] [-T n] [-P /proc/sys/net/ipv4/tcp_fastopen_key]
              [-i seconds] [-a /auto/key/filename] [-k /path/to/main/secret]
-    -k -- Path to long-term main secret file.  Without this, the daemon will
-          attempt to persist an automatic key to the rundir on startup, but
-          this affords no possibility of distribute sync across a cluster, and
-          may be regenerated after e.g. reboots as well. This file must have
-          exactly 32 bytes of secret binary data, and will be re-read every
-          time runtime TFO keys are generated!
+    -k -- Path to long-term main secret file. This file must have at least 32
+          bytes of secret binary data, and will be re-read every time runtime
+          TFO keys are generated. Without this option, the daemon will attempt
+          to persist an automatic key to the rundir on startup, but this
+          affords no possibility of distributed sync across a cluster, and may
+          be regenerated after e.g. reboots as well.
     -a -- Filename to persist an auto-generated key, if -k is not used.
           Defaults to "/run/tofurkey.autokey".
     -i -- Interval seconds for key rotation, default is 21600 (6 hours),
@@ -60,45 +64,65 @@ it with fatal signals such as SIGTERM.
     -T -- Set a fake unix time value which never changes (mostly for testing,
           min value 1000000)
 
+## Generating and managing the main key
+
+The main, long-term, secret key file which is given as the argument to
+`-k` must contain at least 32 bytes of high-entropy secret key material
+generated securely.  Exactly 32 bytes will be read from it.  It is up to
+you how you securely generate and distribute such a key across your
+cluster.  One trivial way to create a decent one is:
+
+    dd if=/dev/urandom of=/path/to/main.key bs=1 count=32
+
+Note that the key is re-read from disk on every half-interval wakeup.
+Because of this, it is possible to replace your main key with a new one
+once in a blue moon with only a minimal disruption in TFO validity for
+clients.  Ideally you'd replace the key roughly simultaneously on all
+servers, and either do so at a time that is not close to a half-interval
+boundary, or restart the daemons shortly afterwards to be sure one
+doesn't remain out of sync due to timing boundary issues. You can
+observe the halfinterval timing from the stderr output of the daemon,
+and it should be happening when `unix_time modulo (interval/2) == 2`.
+
 ## Operational details about timing
 
-The generated keys will only match across the cluster if both the main
-secret **and** the interval are identical on all servers.  A new primary
-ephemeral key comes into use every interval seconds.  The daemon wakes
-up and makes new writes to procfs every half-interval to support properly
-overlapping validity periods.
+The generated TFO keys will only match across the cluster and across
+time if both the main secret **and** the interval are identical on all
+servers. A new primary ephemeral key comes into use every interval
+seconds.  The daemon wakes up and makes new writes to procfs every
+half-interval to support properly overlapping validity periods.  The
+daemon also writes keys once at startup immediately, using the keys that
+would have most-recently been set at the previous half-interval
+boundary.
 
 The Linux procfs interface takes two keys as input.  The first is the
 current primary key used to generate new client cookies, and the second
 is a backup key whose cookies are also honored from TFO clients.
 
-Given "Tn" denotes the configured key interval periods, this is basically
+Given "Tn" denotes the configured key interval periods, and "Kn" denotes
+the primary key whose official lifetime starts at Tn, this is basically
 how the timeline of key rotations plays out, waking up to do something
-roughly 2.02 seconds (to allow some timer slop and ensure we're on the correct
-side of time comparisons) after each half-interval boundary in the unix wall
-clock time (i.e. roughly unix time % half-interval == 2):
+roughly 2.02 seconds (to allow some timer slop and ensure we're on the
+correct side of time comparisons) after each half-interval boundary in
+the unix wall clock time:
 
 * T0:
-  * generate keys for T0 (current primary) and T-1 (what would have been the previous primary)
-  * Write [T0, T-1] to procfs (T0 is current for new cookies, T-1 is honored for valid previous cookies)
+  * generate keys for K0 (current primary) and K-1 (what would have been the previous primary)
+  * Write [K0, K-1] to procfs (K0 is current for new cookies, K-1 is honored for valid previous cookies)
 * T0.5:
-  * generate keys for T0 (current primary) and T1 (next upcoming primary)
-  * Write [T0, T1] to procfs (T0 is still current, T1 is honored for validity, in case another cluster member starts using it before us)
+  * generate keys for K0 (current primary) and K1 (next upcoming primary)
+  * Write [K0, K1] to procfs (K0 is still current, K1 is honored for validity, in case another cluster member starts using it before us)
 * T1:
-  * generate keys for T1 (current primary) and T0 (previous primary)
-  * Write [T1, T0] to procfs (T1 is now current, T0 is honored for validity)
+  * generate keys for K1 (current primary) and K0 (previous primary)
+  * Write [K1, K0] to procfs (K1 is now current, K0 is honored for validity)
 * T1.5:
-  * generate keys for T1 (current) and T2 (next)
-  * Write [T1, T2]
+  * Generate and write [K1 (current), K2 (next)]
 * T2:
-  * generate keys for T2 (current) and T1 (prev)
-  * Write [T2, T1]
+  * Generate and write [K2 (current), K1 (prev)]
 * T2.5:
-  * generate keys for T2 (current) and T3 (next)
-  * Write [T2, T3]
+  * Generate and write [K2 (current), K3 (next)]
 * T3:
-  * generate keys for T3 (current) and T2 (prev)
-  * Write [T3, T2]
+  * Generate and write [K3 (current), K2 (prev)]
 * [and so-on ...]
 
 Clients will pick up cookies with roughly one full interval of validity
