@@ -81,7 +81,7 @@ clients.  Ideally you'd replace the key roughly simultaneously on all
 servers, and either do so at a time that is not close to a half-interval
 boundary, or restart the daemons shortly afterwards to be sure one
 doesn't remain out of sync due to timing boundary issues. You can
-observe the halfinterval timing from the stderr output of the daemon,
+observe the half-interval timing from the stderr output of the daemon,
 and it should be happening when `unix_time modulo (interval/2) == 2`.
 
 ## Operational details about timing
@@ -137,7 +137,7 @@ about the build assumes a modern Linux environment and tooling (gcc, gnu make,
 glibc, etc). As library dependencies, you'll also need to install developer
 versions (headers included!) of libev4 and libsodium (1.0.12 or higher).
 
-Build with: `make`
+Build with: `make` (optionally: set make argument `rundir=/foo` to override the default of '/run' for the autokey storage path)
 
 Run basic tests with: `make check`
 
