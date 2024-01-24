@@ -7,15 +7,19 @@ mandir ?= $(datarootdir)/man
 man8dir ?= $(mandir)/man8
 rundir ?= /run
 
-CPPFLAGS += -DRUNDIR="\"$(rundir)\""
 CFLAGS ?= -std=c11 -O2 -g -Wall -Wextra -Wconversion -Warith-conversion -Wshadow -Warray-bounds=2 -Wcast-align=strict -Wcast-qual -Werror=vla -Wfloat-equal -Wstrict-overflow=5 -Wstrict-aliasing
 LDFLAGS ?=
 LDLIBS ?= -lsodium -lev
 
 .PHONY: all clean distclean check test qa install
 all: tofurkey
+rundir.inc:
+	@echo "// Dynamically created via Makefile" >$@
+	@echo "#define RUNDIR \"$(rundir)\"" >>$@
+tofurkey.c: rundir.inc
 tofurkey: tofurkey.c
 clean:
+	$(RM) rundir.inc
 	$(RM) tofurkey
 distclean: clean
 check: tofurkey

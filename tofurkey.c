@@ -34,6 +34,9 @@
 #include <sodium.h>
 #include <ev.h>
 
+// Defines RUNDIR macro from rundir=x Makefile argument
+#include "rundir.inc"
+
 #define F_NONNULL __attribute__((__nonnull__))
 
 // log outputs of various kinds:
