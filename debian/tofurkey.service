@@ -1,6 +1,7 @@
 # Example systemd unit file for tofurkey
 [Unit]
 Description=tofurkey
+Documentation=man:tofurkey
 After=local-fs.target
 After=network.target
 After=time-sync.target
@@ -10,4 +11,5 @@ WantedBy=multi-user.target
 
 [Service]
 Type=notify
+Restart=on-failure
 ExecStart=/usr/sbin/tofurkey
