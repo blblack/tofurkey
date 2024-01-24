@@ -12,6 +12,8 @@
 #  error This software only works on modern Linux
 #endif
 
+#define _GNU_SOURCE
+
 // system-level includes
 #include <inttypes.h>
 #include <stdbool.h>
@@ -32,13 +34,16 @@
 #include <sodium.h>
 #include <ev.h>
 
+// Defines RUNDIR macro from rundir=x Makefile argument
+#include "rundir.inc"
+
 #define F_NONNULL __attribute__((__nonnull__))
 
 // log outputs of various kinds:
 
 #define log_fatal(fmt_, ...) do {\
     fprintf(stderr, "FATAL: " fmt_ "\n", ##__VA_ARGS__);\
-    exit(42);\
+    abort();\
 } while(0)
 
 #define log_info(fmt_, ...) do {\
@@ -67,9 +72,16 @@
 static const char def_autokey_path[] = RUNDIR "/tofurkey.autokey";
 static const char def_procfs_path[] = "/proc/sys/net/ipv4/tcp_fastopen_key";
 
+// Constant non-secret context for the KDF (like an app-specific fixed salt)
+static const char kdf_ctx[crypto_kdf_blake2b_CONTEXTBYTES] = {
+    't', 'o', 'f', 'u', 'r', 'k', 'e', 'y'
+};
+
 // Assert that kdf_blake2b has the sizes we expect
 _Static_assert(crypto_kdf_blake2b_CONTEXTBYTES == 8U, "b2b has 8 ctx bytes");
 _Static_assert(crypto_kdf_blake2b_KEYBYTES == 32U, "b2b has 32 key bytes");
+_Static_assert(TFO_KEY_LEN >= crypto_kdf_blake2b_BYTES_MIN, "TFO_KEY_LEN >= b2b min");
+_Static_assert(TFO_KEY_LEN <= crypto_kdf_blake2b_BYTES_MAX, "TFO_KEY_LEN <= b2b max");
 
 // This is set by the signal handler for terminal signals, and consumed as the
 // correct signal to re-raise for final termination
@@ -189,11 +201,6 @@ static bool detect_second_half(const struct cfg* cfg_p, const uint64_t now, cons
     return (leftover >= cfg_p->half_interval);
 }
 
-// Constant non-secret context for the KDF (like an app-specific fixed salt)
-static const char kdf_ctx[crypto_kdf_blake2b_CONTEXTBYTES] = {
-    't', 'o', 'f', 'u', 'r', 'k', 'e', 'y'
-};
-
 // Do the idempotent key generation + deployment
 F_NONNULL
 static void do_keys(const struct cfg* cfg_p)
@@ -266,115 +273,10 @@ static void do_keys(const struct cfg* cfg_p)
 }
 
 F_NONNULL
-static void half_interval_cb(struct ev_loop* loop, ev_periodic* w, int revents)
-{
-    assert(loop);
-    assert(w->data);
-    assert(revents == EV_PERIODIC);
-    const struct cfg* cfg_p = (const struct cfg*)w->data;
-    do_keys(cfg_p);
-}
-
-F_NONNULL
-static void terminal_signal_cb(struct ev_loop* loop, struct ev_signal* w, const int revents)
-{
-    assert(loop);
-    assert(w->signum == SIGTERM || w->signum == SIGINT || w->signum == SIGHUP);
-    assert(revents == EV_SIGNAL);
-    log_info("Exiting cleanly on receipt of terminating signal %i", w->signum);
-    killed_by = w->signum;
-    ev_break(loop, EVBREAK_ALL);
-}
-
-static void sysd_notify_ready(void)
-{
-    const char* spath = getenv("NOTIFY_SOCKET");
-    if (!spath)
-        return;
-
-    /* Must be an abstract socket, or an absolute path */
-    if ((spath[0] != '@' && spath[0] != '/') || spath[1] == 0)
-        log_fatal("Invalid NOTIFY_SOCKET path '%s'", spath);
-
-    struct sockaddr_un sun = { 0 };
-    sun.sun_family = AF_UNIX;
-    const size_t plen = strlen(spath) + 1U;
-    if (plen > sizeof(sun.sun_path))
-        log_fatal("Implementation bug/limit: desired control socket path %s exceeds sun_path length of %zu", spath, sizeof(sun.sun_path));
-    memcpy(sun.sun_path, spath, plen);
-    const socklen_t sun_len = (socklen_t)(offsetof(struct sockaddr_un, sun_path) + plen);
-
-    if (sun.sun_path[0] == '@')
-        sun.sun_path[0] = 0;
-
-    char msg[64];
-    int snp_rv = snprintf(msg, 64, "MAINPID=%lu\nREADY=1", (unsigned long)getpid());
-    if (snp_rv < 0 || snp_rv >= 64)
-        log_fatal("BUG: snprintf()=>%i in sysd_notify_ready()", snp_rv);
-
-    int fd = socket(AF_UNIX, SOCK_DGRAM | SOCK_CLOEXEC, 0);
-    if (fd < 0)
-        log_fatal("Cannot create AF_UNIX socket");
-
-    struct iovec iov = { .iov_base = msg, .iov_len = strlen(msg) };
-    struct msghdr m = {
-        .msg_iov = &iov,
-        .msg_iovlen = 1,
-        .msg_name = &sun,
-        .msg_namelen = sun_len
-    };
-
-    ssize_t sm_rv = sendmsg(fd, &m, 0);
-    if (sm_rv < 0)
-        log_fatal("sendmsg() to systemd NOTIFY_SOCKET failed: %s", strerror(errno));
-
-    if (close(fd))
-        log_fatal("close() of systemd NOTIFY_SOCKET failed: %s", strerror(errno));
-}
-
-static void usage(void)
-{
-    fprintf(stderr,
-            "tofurkey [-vVno] [-T n] [-P %s]\n"
-            "         [-i seconds] [-a %s] [-k /path/to/main/secret]\n"
-            "-k -- Path to long-term main secret file.  Without this, the daemon will\n"
-            "      attempt to persist an automatic key to the rundir on startup, but\n"
-            "      this affords no possibility of distribute sync across a cluster, and\n"
-            "      may be regenerated after e.g. reboots as well. This file must have\n"
-            "      exactly 32 bytes of secret binary data, and will be re-read every\n"
-            "      time runtime TFO keys are generated!\n"
-            "-a -- Filename to persist an auto-generated key, if -k is not used.\n"
-            "      Defaults to %s\n"
-            "-i -- Interval seconds for key rotation, default is 21600 (6 hours),\n"
-            "      allowed range is 10 - 604800, must be even (daemon wakes up to rotate\n"
-            "      keys at every half-interval of unix time to manage validity overlaps)\n"
-            "-v -- Verbose output to stderr\n"
-            "-n -- Dry-run mode - Data is not actually written to procfs, but everything\n"
-            "      else still happens\n"
-            "-o -- One-shot mode - it will calculate the current keys and set them once\n"
-            "      and then exit. (normal mode is to remain running and rotate keys on\n"
-            "      timer intervals forever)\n"
-            "-V -- Verbose and also print TFO keys (mostly for testing, this leaks\n"
-            "      short-term secrets to stderr!)\n"
-            "-P -- Override default procfs output path for setting keys (mostly for\n"
-            "      testing)\n"
-            "-T -- Set a fake unix time value which never changes (mostly for testing,\n"
-            "      min value 1000000)\n\n"
-            "This is tofurkey v0.9\n"
-            "tofurkey is a tool for distributed sync of TCP Fastopen key rotations\n"
-            "More info is available at https://github.com/blblack/tofurkey\n",
-            def_procfs_path, def_autokey_path, def_autokey_path
-           );
-    exit(2);
-}
-
-F_NONNULL
 static void autokey_setup(struct cfg* cfg_p)
 {
     assert(cfg_p->autokey_path); // parse_args has run
-    // if -k was supplied, do nothing here:
-    if (cfg_p->main_key_path)
-        return;
+    assert(!cfg_p->main_key_path); // no -k was given
 
     log_info("No -k argument was given, so this invocation will use a local, "
              "autogenerated key at '%s'.  This will /not/ allow for "
@@ -407,6 +309,106 @@ static void autokey_setup(struct cfg* cfg_p)
     // We could re-check reading again after the above and fail fatally, but
     // the initial key generation that happens just after this on startup will
     // do it for us.
+}
+
+F_NONNULL
+static void half_interval_cb(struct ev_loop* loop, ev_periodic* w, int revents)
+{
+    assert(loop);
+    assert(w->data);
+    assert(revents == EV_PERIODIC);
+    const struct cfg* cfg_p = (const struct cfg*)w->data;
+    do_keys(cfg_p);
+}
+
+F_NONNULL
+static void terminal_signal_cb(struct ev_loop* loop, struct ev_signal* w, const int revents)
+{
+    assert(loop);
+    assert(w->signum == SIGTERM || w->signum == SIGINT || w->signum == SIGHUP);
+    assert(revents == EV_SIGNAL);
+    log_info("Exiting cleanly on receipt of terminating signal %i", w->signum);
+    killed_by = w->signum;
+    ev_break(loop, EVBREAK_ALL);
+}
+
+F_NONNULL
+static void sysd_notify_ready(const char* spath)
+{
+    /* Must be an abstract socket, or an absolute path */
+    if ((spath[0] != '@' && spath[0] != '/') || spath[1] == 0)
+        log_fatal("Invalid NOTIFY_SOCKET path '%s'", spath);
+
+    struct sockaddr_un sun = { 0 };
+    sun.sun_family = AF_UNIX;
+    const size_t plen = strlen(spath) + 1U;
+    if (plen > sizeof(sun.sun_path))
+        log_fatal("Implementation bug/limit: desired control socket path %s exceeds sun_path length of %zu", spath, sizeof(sun.sun_path));
+    memcpy(sun.sun_path, spath, plen);
+    const socklen_t sun_len = (socklen_t)(offsetof(struct sockaddr_un, sun_path) + plen);
+
+    if (sun.sun_path[0] == '@')
+        sun.sun_path[0] = 0;
+
+    char msg[64];
+    int snp_rv = snprintf(msg, 64, "MAINPID=%lu\nREADY=1", (unsigned long)getpid());
+    if (snp_rv < 0 || snp_rv >= 64)
+        log_fatal("BUG: snprintf()=>%i in sysd_notify_ready()", snp_rv);
+
+    int fd = socket(AF_UNIX, SOCK_DGRAM | SOCK_CLOEXEC, 0);
+    if (fd < 0)
+        log_fatal("Cannot create AF_UNIX socket");
+
+    struct iovec iov = { .iov_base = msg, .iov_len = strlen(msg) };
+    struct msghdr m = {
+        .msg_iov = &iov,
+        .msg_iovlen = 1,
+        .msg_name = &sun,
+        .msg_namelen = sun_len
+    };
+
+    ssize_t sm_rv = sendmsg(fd, &m, MSG_NOSIGNAL);
+    if (sm_rv < 0)
+        log_fatal("sendmsg() to systemd NOTIFY_SOCKET failed: %s", strerror(errno));
+
+    if (close(fd))
+        log_fatal("close() of systemd NOTIFY_SOCKET failed: %s", strerror(errno));
+}
+
+static void usage(void)
+{
+    fprintf(stderr,
+            "tofurkey [-vVno] [-T n] [-P %s]\n"
+            "         [-i seconds] [-a %s] [-k /path/to/main/secret]\n"
+            "-k -- Path to long-term main secret file. This file must have at least 32\n"
+            "      bytes of secret binary data, and will be re-read every time runtime\n"
+            "      TFO keys are generated. Without this option, the daemon will attempt\n"
+            "      to persist an automatic key to the rundir on startup, but this\n"
+            "      affords no possibility of distributed sync across a cluster, and may\n"
+            "      be regenerated after e.g. reboots as well.\n"
+            "-a -- Filename to persist an auto-generated key, if -k is not used.\n"
+            "      Defaults to %s\n"
+            "-i -- Interval seconds for key rotation, default is 21600 (6 hours),\n"
+            "      allowed range is 10 - 604800, must be even (daemon wakes up to rotate\n"
+            "      keys at every half-interval of unix time to manage validity overlaps)\n"
+            "-v -- Verbose output to stderr\n"
+            "-n -- Dry-run mode - Data is not actually written to procfs, but everything\n"
+            "      else still happens\n"
+            "-o -- One-shot mode - it will calculate the current keys and set them once\n"
+            "      and then exit. (normal mode is to remain running and rotate keys on\n"
+            "      timer intervals forever)\n"
+            "-V -- Verbose and also print TFO keys (mostly for testing, this leaks\n"
+            "      short-term secrets to stderr!)\n"
+            "-P -- Override default procfs output path for setting keys (mostly for\n"
+            "      testing)\n"
+            "-T -- Set a fake unix time value which never changes (mostly for testing,\n"
+            "      min value 1000000)\n\n"
+            "This is tofurkey v1.0.0\n"
+            "tofurkey is a tool for distributed sync of TCP Fastopen key rotations\n"
+            "More info is available at https://github.com/blblack/tofurkey\n",
+            def_procfs_path, def_autokey_path, def_autokey_path
+           );
+    exit(2);
 }
 
 F_NONNULL
@@ -492,7 +494,8 @@ int main(int argc, char* argv[])
     // If -k is not given, attempt to setup and persist an automagic key at the
     // path from -a (default default is /run/tofurkey.autokey), and fail if we
     // can't write it.
-    autokey_setup(cfg_p);
+    if (!cfg_p->main_key_path)
+        autokey_setup(cfg_p);
 
     // Initially set keys to whatever the current wall clock dictates, and exit
     // immediately if one-shot mode
@@ -508,7 +511,9 @@ int main(int argc, char* argv[])
     // systemd.  This allows systemd-level dependencies to work (if a network
     // daemon binds to tofurkey.service, it can be assured the keys have been
     // set before it starts).
-    sysd_notify_ready();
+    const char* spath = getenv("NOTIFY_SOCKET");
+    if (spath)
+        sysd_notify_ready(spath);
 
     // create default ev loop
     // (note: the libev dependency seems like overkill just to run a single

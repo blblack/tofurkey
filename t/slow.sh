@@ -26,8 +26,9 @@ else
     exit 42
 fi
 
-set -e
-set -x
-t/output_checker.py
-echo Test passed!
+if ! t/output_checker.py; then
+    echo FAIL: Output checks failed!
+    exit 42
+fi
+echo Slow test passed!
 exit 0

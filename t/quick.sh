@@ -66,5 +66,5 @@ if ! cmp t/testout/fake_procfs t/testout/fake_procfs.prev; then
     exit 42
 fi
 
-echo Tests passed!
+echo Quick tests passed!
 exit 0
