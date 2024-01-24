@@ -1,3 +1,10 @@
+1.0.0 - 2024-01-24
+    * Minor build improvements (dependencies, rundir stuff)
+    * Minor code/documentation refactors/improvements
+    * Example systemd unit gained a Documentation line and Restart=on-failure
+    * Switching to semver-style versioning from here forward and calling it
+      "stable".
+
 0.9 - 2024-01-23
     * Minor fixup to Makefile CPPFLAGS handling, so that critical defines are
       not lost when package build systems set their own CPPFLAGS.
