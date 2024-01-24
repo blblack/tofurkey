@@ -80,6 +80,8 @@ static const char kdf_ctx[crypto_kdf_blake2b_CONTEXTBYTES] = {
 // Assert that kdf_blake2b has the sizes we expect
 _Static_assert(crypto_kdf_blake2b_CONTEXTBYTES == 8U, "b2b has 8 ctx bytes");
 _Static_assert(crypto_kdf_blake2b_KEYBYTES == 32U, "b2b has 32 key bytes");
+_Static_assert(TFO_KEY_LEN >= crypto_kdf_blake2b_BYTES_MIN, "TFO_KEY_LEN >= b2b min");
+_Static_assert(TFO_KEY_LEN <= crypto_kdf_blake2b_BYTES_MAX, "TFO_KEY_LEN <= b2b max");
 
 // This is set by the signal handler for terminal signals, and consumed as the
 // correct signal to re-raise for final termination
