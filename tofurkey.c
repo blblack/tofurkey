@@ -12,6 +12,8 @@
 #  error This software only works on modern Linux
 #endif
 
+#define _GNU_SOURCE
+
 // system-level includes
 #include <inttypes.h>
 #include <stdbool.h>
