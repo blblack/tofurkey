@@ -67,6 +67,11 @@
 static const char def_autokey_path[] = RUNDIR "/tofurkey.autokey";
 static const char def_procfs_path[] = "/proc/sys/net/ipv4/tcp_fastopen_key";
 
+// Constant non-secret context for the KDF (like an app-specific fixed salt)
+static const char kdf_ctx[crypto_kdf_blake2b_CONTEXTBYTES] = {
+    't', 'o', 'f', 'u', 'r', 'k', 'e', 'y'
+};
+
 // Assert that kdf_blake2b has the sizes we expect
 _Static_assert(crypto_kdf_blake2b_CONTEXTBYTES == 8U, "b2b has 8 ctx bytes");
 _Static_assert(crypto_kdf_blake2b_KEYBYTES == 32U, "b2b has 32 key bytes");
@@ -188,11 +193,6 @@ static bool detect_second_half(const struct cfg* cfg_p, const uint64_t now, cons
     assert(leftover < cfg_p->interval);
     return (leftover >= cfg_p->half_interval);
 }
-
-// Constant non-secret context for the KDF (like an app-specific fixed salt)
-static const char kdf_ctx[crypto_kdf_blake2b_CONTEXTBYTES] = {
-    't', 'o', 'f', 'u', 'r', 'k', 'e', 'y'
-};
 
 // Do the idempotent key generation + deployment
 F_NONNULL
