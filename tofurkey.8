@@ -2,8 +2,19 @@
 .SH NAME
 tofurkey \- Distributed sync for TCP Fastopen key rotations
 .SH SYNOPSIS
-\fBtofurkey\fR [-vVno] [-T n] [-P /proc/sys/net/ipv4/tcp_fastopen_key]
-         [-i seconds] [-a /auto/key/filename] [-k /path/to/main/secret]
+.SY tofurkey
+.RB [ \-vVno ]
+.RB [ \-T\~\c
+.IR n ]
+.RB [ \-P\~\c
+.IR /proc/sys/net/ipv4/tcp_fastopen_key ]
+.RB [ \-i\~\c
+.IR seconds ]
+.RB [ \-a\~\c
+.IR /auto/key/filename ]
+.RB [ \-k\~\c
+.IR /path/to/main/secret ]
+.YS
 .SH DESCRIPTION
 \fBtofurkey\fR is a simple daemon which manages the timely,
 synchronized, deterministic rotation of TCP Fastopen (TFO) keys across a
@@ -13,7 +24,7 @@ interface for dual keys in \fI/proc/sys/net/ipv4/tcp_fastopen_key\fR .
 In order to synchronize across a cluster, it requires as input a
 long-term main secret key file which is shared across the cluster (by
 you and/or your configuration/secret management system), set via the
-`-k` argument, which points at a secret file with at least 32 bytes of
+\fB\-k\fR argument, which points at a secret file with at least 32 bytes of
 high-entropy random data to use as a main key.
 
 If this is not supplied, a random secret will be auto-generated and
@@ -23,54 +34,45 @@ persistence.  A warning will be issued to stderr at startup in this
 case, as it's not expected to be a common operating mode in production.
 .SH OPTIONS
 .TP
-\fB-k\fR
+\fB\-k\fR
 Path to long-term main secret file. This file must have at least 32
 bytes of secret binary data, and will be re-read every time runtime
 TFO keys are generated. Without this option, the daemon will attempt
 to persist an automatic key to the rundir on startup, but this
 affords no possibility of distributed sync across a cluster, and may
 be regenerated after e.g. reboots as well.
-.P
 .TP
-\fB-a\fR
-Filename to persist an auto-generated key, if -k is not used.
+\fB\-a\fR
+Filename to persist an auto-generated key, if \-k is not used.
 Defaults to \fI/run/tofurkey.autokey\fR
-.P
 .TP
-\fB-i\fR
+\fB\-i\fR
 Interval seconds for key rotation, default is 21600 (6 hours),
 allowed range is 10 - 604800, must be even (daemon wakes up to rotate
 keys at every half-interval of unix time to manage validity overlaps)
-.P
 .TP
-\fB-v\fR
+\fB\-v\fR
 Verbose output to stderr
-.P
 .TP
-\fB-n\fR
+\fB\-n\fR
 Dry-run mode - Data is not actually written to procfs, but everything
 else still happens
-.P
 .TP
-\fB-o\fR
+\fB\-o\fR
 One-shot mode - it will calculate the current keys and set them once
 and then exit. (normal mode is to remain running and rotate keys on
 timer intervals forever)
-.P
 .TP
-\fB-V\fR
+\fB\-V\fR
 Verbose and also print TFO keys (mostly for testing, this leaks
 short-term secrets to stderr!)
-.P
 .TP
-\fB-P\fR
+\fB\-P\fR
 Override default procfs output path for setting keys (mostly for
 testing)
-.P
 .TP
-\fB-T\fR
+\fB\-T\fR
 Set a fake unix time value which never changes (mostly for testing,
 min value 1000000)
-.P
 .SH MORE INFO
 https://github.com/blblack/tofurkey
