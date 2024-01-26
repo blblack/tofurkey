@@ -101,22 +101,25 @@ struct cfg {
     bool one_shot;
 };
 
-// Safely read the main key file.  If anything goes amiss it will be logged.
+// Safely read the main key file. If anything goes amiss, main_key will be
+// wiped (if we even attempted a read) and the error will be logged to stderr.
 // false -> success, true -> error
 F_NONNULL
-static bool safe_read_keyfile(uint8_t keybuf[static restrict crypto_kdf_blake2b_KEYBYTES], const char* restrict main_key_path)
+static bool safe_read_keyfile(uint8_t main_key[static restrict crypto_kdf_blake2b_KEYBYTES], const char* restrict main_key_path)
 {
     const int key_fd = open(main_key_path, O_CLOEXEC | O_RDONLY);
     if (key_fd < 0) {
         log_info("open(%s) failed: %s", main_key_path, strerror(errno));
         return true;
     }
-    const ssize_t readrv = read(key_fd, keybuf, crypto_kdf_blake2b_KEYBYTES);
+    const ssize_t readrv = read(key_fd, main_key, crypto_kdf_blake2b_KEYBYTES);
     if (readrv != crypto_kdf_blake2b_KEYBYTES) {
+        sodium_memzero(main_key, crypto_kdf_blake2b_KEYBYTES);
         log_info("read(%s, %u) failed: %s", main_key_path, crypto_kdf_blake2b_KEYBYTES, strerror(errno));
         return true;
     }
     if (close(key_fd)) {
+        sodium_memzero(main_key, crypto_kdf_blake2b_KEYBYTES);
         log_info("close(%s) failed: %s", main_key_path, strerror(errno));
         return true;
     }
@@ -208,14 +211,6 @@ static void do_keys(const struct cfg* cfg_p)
     const uint64_t now = cfg_p->fake_time ? cfg_p->fake_time : (uint64_t)time(NULL);
     log_info("Setting keys for unix time %" PRIu64, now);
 
-    // Block all signals until we're done with security-sensitive memory
-    sigset_t sigmask_all;
-    sigfillset(&sigmask_all);
-    sigset_t sigmask_prev;
-    sigemptyset(&sigmask_prev);
-    if (sigprocmask(SIG_SETMASK, &sigmask_all, &sigmask_prev))
-        log_fatal("sigprocmask() failed: %s", strerror(errno));
-
     // Allocate storage for various keys in various forms:
     char* keys_ascii = sodium_malloc(TFO_ASCII_ALLOC);
     if (!keys_ascii)
@@ -238,6 +233,14 @@ static void do_keys(const struct cfg* cfg_p)
     assert(ctr_primary > 0);
     const bool second_half = detect_second_half(cfg_p, now, ctr_primary);
 
+    // Block all signals until we're done with security-sensitive memory
+    sigset_t sigmask_all;
+    sigfillset(&sigmask_all);
+    sigset_t sigmask_prev;
+    sigemptyset(&sigmask_prev);
+    if (sigprocmask(SIG_SETMASK, &sigmask_all, &sigmask_prev))
+        log_fatal("sigprocmask() failed: %s", strerror(errno));
+
     // Now read in the long-term main key file and generate our pair of ephemeral keys:
     if (safe_read_keyfile(main_key, cfg_p->main_key_path)) {
         sodium_free(main_key);
@@ -256,20 +259,19 @@ static void do_keys(const struct cfg* cfg_p)
     convert_keys_ascii(keys_ascii, key_primary, key_backup);
     sodium_free(key_primary);
     sodium_free(key_backup);
-
     log_verbose_leaky("... Generated ASCII TFO keys for procfs write: [%" PRIu64 "] %s", now, keys_ascii);
-    if (cfg_p->dry_run) {
-        log_verbose("... Not writing to procfs because dry-run was specified (-n)");
-    } else {
-        log_verbose("... Writing new keys to procfs");
+    if (!cfg_p->dry_run)
         safe_write_procfs(keys_ascii, cfg_p->procfs_path);
-    }
     sodium_free(keys_ascii);
 
     // Restore normal signal handling
     if (sigprocmask(SIG_SETMASK, &sigmask_prev, NULL))
         log_fatal("sigprocmask() failed: %s", strerror(errno));
-    log_verbose("... Done, waiting for next half-interval wakeup");
+
+    if (cfg_p->dry_run)
+        log_verbose("... Done, waiting for next half-interval wakeup (did not write to procfs because dry-run (-n) was specified)");
+    else
+        log_verbose("... Done, waiting for next half-interval wakeup");
 }
 
 F_NONNULL
@@ -286,29 +288,31 @@ static void autokey_setup(struct cfg* cfg_p)
     // for all other functions:
     cfg_p->main_key_path = strdup(cfg_p->autokey_path);
 
-    // Do a trial read to determine if there's an existing autokey file which
-    // is usable (if so, we're done here).
     uint8_t* main_key = sodium_malloc(crypto_kdf_blake2b_KEYBYTES);
     if (!main_key)
         log_fatal("sodium_malloc() failed: %s", strerror(errno));
-    const bool success = !safe_read_keyfile(main_key, cfg_p->main_key_path);
-    sodium_free(main_key);
-    if (success)
-        return;
 
-    // If not, attempt to (over)write with a new random key, failing fatally
-    log_info("Could not read autokey file %s, generating a new random one",
-             cfg_p->main_key_path);
-    main_key = sodium_malloc(crypto_kdf_blake2b_KEYBYTES);
-    if (!main_key)
-        log_fatal("sodium_malloc() failed: %s", strerror(errno));
-    randombytes_buf(main_key, crypto_kdf_blake2b_KEYBYTES);
-    safe_write_autokey(main_key, cfg_p->autokey_path);
+    // Block all signals until we're done with security-sensitive memory
+    sigset_t sigmask_all;
+    sigfillset(&sigmask_all);
+    sigset_t sigmask_prev;
+    sigemptyset(&sigmask_prev);
+    if (sigprocmask(SIG_SETMASK, &sigmask_all, &sigmask_prev))
+        log_fatal("sigprocmask() failed: %s", strerror(errno));
+
+    // Do a trial read to determine if there's an existing autokey file which
+    // is usable.  If it's not usable, invent a random key and persist it.
+    if (safe_read_keyfile(main_key, cfg_p->main_key_path)) {
+        log_info("Could not read autokey file %s, generating a new random one",
+                 cfg_p->main_key_path);
+        randombytes_buf(main_key, crypto_kdf_blake2b_KEYBYTES);
+        safe_write_autokey(main_key, cfg_p->autokey_path);
+    }
     sodium_free(main_key);
 
-    // We could re-check reading again after the above and fail fatally, but
-    // the initial key generation that happens just after this on startup will
-    // do it for us.
+    // Restore normal signal handling
+    if (sigprocmask(SIG_SETMASK, &sigmask_prev, NULL))
+        log_fatal("sigprocmask() failed: %s", strerror(errno));
 }
 
 F_NONNULL

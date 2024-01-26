@@ -1,3 +1,7 @@
+
+    * A few pedantic fixups to improve the security of secret key
+      data while loaded in memory for use
+
 1.0.0 - 2024-01-24
     * Minor build improvements (dependencies, rundir stuff)
     * Minor code/documentation refactors/improvements
