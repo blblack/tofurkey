@@ -1,4 +1,5 @@
 
+    * Minor source code formatting (wrap lines >= 100)
     * A few pedantic fixups to improve the security of secret key
       data while loaded in memory for use
 
