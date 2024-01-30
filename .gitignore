@@ -2,3 +2,5 @@ rundir.inc
 tofurkey
 t/testout
 t/testout_slow
+zig-cache
+zig-out
