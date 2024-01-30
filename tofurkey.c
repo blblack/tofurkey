@@ -55,11 +55,6 @@
         fprintf(stderr, fmt_ "\n", ##__VA_ARGS__);\
 } while(0)
 
-#define log_verbose_leaky(fmt_, ...) do {\
-    if (cfg_p->verbose_leaky)\
-        fprintf(stderr, fmt_ "\n", ##__VA_ARGS__);\
-} while(0)
-
 // The data length of a single ephemeral TFO key in binary form
 #define TFO_KEY_LEN 16U
 
@@ -268,8 +263,11 @@ static void do_keys(const struct cfg* cfg_p)
     convert_keys_ascii(keys_ascii, key_primary, key_backup);
     sodium_free(key_primary);
     sodium_free(key_backup);
-    log_verbose_leaky("... Generated ASCII TFO keys for procfs write: [%" PRIu64 "] %s",
-                      now, keys_ascii);
+    if (cfg_p->verbose_leaky) {
+        const char* half = second_half ? "2nd" : "1st";
+        log_verbose("... Generated ASCII TFO keys for procfs write: "
+                    "[%" PRIu64 "] (%s half) %s", now, half, keys_ascii);
+    }
     if (!cfg_p->dry_run)
         safe_write_procfs(keys_ascii, cfg_p->procfs_path);
     sodium_free(keys_ascii);
@@ -279,10 +277,9 @@ static void do_keys(const struct cfg* cfg_p)
         log_fatal("sigprocmask() failed: %s", strerror(errno));
 
     if (cfg_p->dry_run)
-        log_verbose("... Done, waiting for next half-interval wakeup "
-                    "(did not write to procfs because dry-run (-n) was specified)");
-    else
-        log_verbose("... Done, waiting for next half-interval wakeup");
+        log_verbose("... did not write to procfs because dry-run (-n) was specified");
+    if (!cfg_p->one_shot)
+        log_verbose("... done, waiting for next half-interval wakeup");
 }
 
 F_NONNULL
@@ -563,10 +560,8 @@ int main(int argc, char* argv[])
     ev_signal_start(loop, &sig_hup);
 
     // We spend all our runtime hanging out here until something kills us
-    log_verbose("Entering runtime loop with interval value %" PRIu64 " (will "
-                "wake up to rotate keys ~2s after each time the unix "
-                "timestamp is evenly divisible by %" PRIu64 ")",
-                cfg_p->interval, cfg_p->half_interval);
+    log_verbose("Will set keys at each half-interval, when unix_time %%"
+                " %" PRIu64 " ~= 2", cfg_p->half_interval);
     ev_run(loop, 0);
 
     // Clean up and raise terminating signal, if any

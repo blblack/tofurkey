@@ -56,7 +56,7 @@ def main():
     log_path = "t/testout/log"
     main_key = pathlib.Path(key_path).read_bytes()
     tfo_re = re.compile(
-        r"procfs write: \[([0-9]+)\] "
+        r"procfs write: \[([0-9]+)\] \((?:1st|2nd) half\) "
         r"([0-9a-f]{8}-[0-9a-f]{8}-[0-9a-f]{8}-[0-9a-f]{8}),"
         r"([0-9a-f]{8}-[0-9a-f]{8}-[0-9a-f]{8}-[0-9a-f]{8})$"
     )
