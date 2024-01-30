@@ -1,4 +1,4 @@
-
+1.0.1 - 2024-01-30
     * Minor fixups to manpage formatting
     * Minor source code formatting (wrap lines >= 100)
     * Some verbose (-v) stderr outputs changed in order to be a
