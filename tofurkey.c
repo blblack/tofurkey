@@ -111,8 +111,12 @@ static bool safe_read_keyfile(uint8_t main_key[static restrict crypto_kdf_blake2
     const ssize_t readrv = read(key_fd, main_key, crypto_kdf_blake2b_KEYBYTES);
     if (readrv != crypto_kdf_blake2b_KEYBYTES) {
         sodium_memzero(main_key, crypto_kdf_blake2b_KEYBYTES);
-        log_info("read(%s, %u) failed: %s",
-                 main_key_path, crypto_kdf_blake2b_KEYBYTES, strerror(errno));
+        if (readrv < 0)
+            log_info("read(%s, %u) failed: %s",
+                     main_key_path, crypto_kdf_blake2b_KEYBYTES, strerror(errno));
+        else
+            log_info("read(%s): wanted %u bytes, but got %zi bytes",
+                     main_key_path, crypto_kdf_blake2b_KEYBYTES, readrv);
         return true;
     }
     if (close(key_fd)) {
@@ -137,7 +141,11 @@ static void safe_write_procfs(char keys_ascii[static restrict TFO_ASCII_ALLOC],
     const ssize_t writerv = write(procfs_fd, keys_ascii, TFO_ASCII_ALLOC);
     if (writerv != TFO_ASCII_ALLOC) {
         sodium_free(keys_ascii);
-        log_fatal("write(%s, %u) failed: %s", procfs_path, TFO_ASCII_ALLOC, strerror(errno));
+        if (writerv < 0)
+            log_fatal("write(%s, %u) failed: %s", procfs_path, TFO_ASCII_ALLOC, strerror(errno));
+        else
+            log_fatal("write(%s): wanted %u bytes, but got %zi bytes",
+                      procfs_path, TFO_ASCII_ALLOC, writerv);
     }
     if (close(procfs_fd)) {
         sodium_free(keys_ascii);
@@ -160,8 +168,12 @@ static void safe_write_autokey(uint8_t main_key[static restrict crypto_kdf_blake
     const ssize_t writerv = write(autokey_fd, main_key, crypto_kdf_blake2b_KEYBYTES);
     if (writerv != crypto_kdf_blake2b_KEYBYTES) {
         sodium_free(main_key);
-        log_fatal("write(%s, %u) failed: %s", autokey_path,
-                  crypto_kdf_blake2b_KEYBYTES, strerror(errno));
+        if (writerv < 0)
+            log_fatal("write(%s, %u) failed: %s", autokey_path,
+                      crypto_kdf_blake2b_KEYBYTES, strerror(errno));
+        else
+            log_fatal("write(%s): wanted %u bytes, but got %zi bytes",
+                      autokey_path, crypto_kdf_blake2b_KEYBYTES, writerv);
     }
     if (close(autokey_fd)) {
         sodium_free(main_key);
