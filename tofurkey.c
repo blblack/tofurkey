@@ -108,6 +108,8 @@ static bool safe_read_keyfile(uint8_t main_key[static restrict crypto_kdf_blake2
         log_info("open(%s) failed: %s", main_key_path, strerror(errno));
         return true;
     }
+
+    bool rv = false;
     const ssize_t readrv = read(key_fd, main_key, crypto_kdf_blake2b_KEYBYTES);
     if (readrv != crypto_kdf_blake2b_KEYBYTES) {
         sodium_memzero(main_key, crypto_kdf_blake2b_KEYBYTES);
@@ -117,14 +119,14 @@ static bool safe_read_keyfile(uint8_t main_key[static restrict crypto_kdf_blake2
         else
             log_info("read(%s): wanted %u bytes, but got %zi bytes",
                      main_key_path, crypto_kdf_blake2b_KEYBYTES, readrv);
-        return true;
+        rv = true;
     }
     if (close(key_fd)) {
         sodium_memzero(main_key, crypto_kdf_blake2b_KEYBYTES);
         log_info("close(%s) failed: %s", main_key_path, strerror(errno));
-        return true;
+        rv = true;
     }
-    return false;
+    return rv;
 }
 
 // Safely write the keys to procfs, internally fatal after clearing/freeing the
