@@ -162,7 +162,8 @@ static void safe_write_autokey(uint8_t main_key[static restrict crypto_kdf_blake
                                const char* restrict autokey_path)
 {
     const int autokey_fd = open(autokey_path,
-                                O_CLOEXEC | O_WRONLY | O_CREAT | O_TRUNC | O_SYNC, S_IRUSR);
+                                O_CLOEXEC | O_WRONLY | O_CREAT | O_TRUNC | O_SYNC,
+                                S_IRUSR | S_IWUSR);
     if (autokey_fd < 0) {
         sodium_free(main_key);
         log_fatal("open(%s) failed: %s", autokey_path, strerror(errno));
