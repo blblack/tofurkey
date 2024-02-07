@@ -431,7 +431,7 @@ static void usage(void)
             "      testing)\n"
             "-T -- Set a fake unix time value which never changes (mostly for testing,\n"
             "      min value 1000000)\n\n"
-            "This is tofurkey v1.0.1\n"
+            "This is tofurkey v1.0.2\n"
             "tofurkey is a tool for distributed sync of TCP Fastopen key rotations\n"
             "More info is available at https://github.com/blblack/tofurkey\n",
             def_procfs_path, def_autokey_path, def_autokey_path
