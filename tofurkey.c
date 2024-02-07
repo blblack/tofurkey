@@ -108,19 +108,25 @@ static bool safe_read_keyfile(uint8_t main_key[static restrict crypto_kdf_blake2
         log_info("open(%s) failed: %s", main_key_path, strerror(errno));
         return true;
     }
+
+    bool rv = false;
     const ssize_t readrv = read(key_fd, main_key, crypto_kdf_blake2b_KEYBYTES);
     if (readrv != crypto_kdf_blake2b_KEYBYTES) {
         sodium_memzero(main_key, crypto_kdf_blake2b_KEYBYTES);
-        log_info("read(%s, %u) failed: %s",
-                 main_key_path, crypto_kdf_blake2b_KEYBYTES, strerror(errno));
-        return true;
+        if (readrv < 0)
+            log_info("read(%s, %u) failed: %s",
+                     main_key_path, crypto_kdf_blake2b_KEYBYTES, strerror(errno));
+        else
+            log_info("read(%s): wanted %u bytes, but got %zi bytes",
+                     main_key_path, crypto_kdf_blake2b_KEYBYTES, readrv);
+        rv = true;
     }
     if (close(key_fd)) {
         sodium_memzero(main_key, crypto_kdf_blake2b_KEYBYTES);
         log_info("close(%s) failed: %s", main_key_path, strerror(errno));
-        return true;
+        rv = true;
     }
-    return false;
+    return rv;
 }
 
 // Safely write the keys to procfs, internally fatal after clearing/freeing the
@@ -137,7 +143,11 @@ static void safe_write_procfs(char keys_ascii[static restrict TFO_ASCII_ALLOC],
     const ssize_t writerv = write(procfs_fd, keys_ascii, TFO_ASCII_ALLOC);
     if (writerv != TFO_ASCII_ALLOC) {
         sodium_free(keys_ascii);
-        log_fatal("write(%s, %u) failed: %s", procfs_path, TFO_ASCII_ALLOC, strerror(errno));
+        if (writerv < 0)
+            log_fatal("write(%s, %u) failed: %s", procfs_path, TFO_ASCII_ALLOC, strerror(errno));
+        else
+            log_fatal("write(%s): wanted %u bytes, but got %zi bytes",
+                      procfs_path, TFO_ASCII_ALLOC, writerv);
     }
     if (close(procfs_fd)) {
         sodium_free(keys_ascii);
@@ -152,7 +162,8 @@ static void safe_write_autokey(uint8_t main_key[static restrict crypto_kdf_blake
                                const char* restrict autokey_path)
 {
     const int autokey_fd = open(autokey_path,
-                                O_CLOEXEC | O_WRONLY | O_CREAT | O_TRUNC | O_SYNC, S_IRUSR);
+                                O_CLOEXEC | O_WRONLY | O_CREAT | O_TRUNC | O_SYNC,
+                                S_IRUSR | S_IWUSR);
     if (autokey_fd < 0) {
         sodium_free(main_key);
         log_fatal("open(%s) failed: %s", autokey_path, strerror(errno));
@@ -160,8 +171,12 @@ static void safe_write_autokey(uint8_t main_key[static restrict crypto_kdf_blake
     const ssize_t writerv = write(autokey_fd, main_key, crypto_kdf_blake2b_KEYBYTES);
     if (writerv != crypto_kdf_blake2b_KEYBYTES) {
         sodium_free(main_key);
-        log_fatal("write(%s, %u) failed: %s", autokey_path,
-                  crypto_kdf_blake2b_KEYBYTES, strerror(errno));
+        if (writerv < 0)
+            log_fatal("write(%s, %u) failed: %s", autokey_path,
+                      crypto_kdf_blake2b_KEYBYTES, strerror(errno));
+        else
+            log_fatal("write(%s): wanted %u bytes, but got %zi bytes",
+                      autokey_path, crypto_kdf_blake2b_KEYBYTES, writerv);
     }
     if (close(autokey_fd)) {
         sodium_free(main_key);
@@ -416,7 +431,7 @@ static void usage(void)
             "      testing)\n"
             "-T -- Set a fake unix time value which never changes (mostly for testing,\n"
             "      min value 1000000)\n\n"
-            "This is tofurkey v1.0.1\n"
+            "This is tofurkey v1.0.2\n"
             "tofurkey is a tool for distributed sync of TCP Fastopen key rotations\n"
             "More info is available at https://github.com/blblack/tofurkey\n",
             def_procfs_path, def_autokey_path, def_autokey_path
