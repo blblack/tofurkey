@@ -134,8 +134,8 @@ would be ~3-9 hours of validity.
 
 This is a very simple project, there's just one C file, basically. Everything
 about the build assumes a modern Linux environment and tooling (gcc, gnu make,
-glibc, etc). As library dependencies, you'll also need to install developer
-versions (headers included!) of libev4 and libsodium (1.0.12 or higher).
+glibc, etc).  It does have one library dependency: you'll need to install the
+developer package (headers included!) of libsodium 1.0.12 or higher.
 
 Build with: `make` (optionally: set make argument `rundir=/foo` to override the default of '/run' for the autokey storage path)
 
