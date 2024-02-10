@@ -48,7 +48,7 @@ it with fatal signals such as SIGTERM.
           be regenerated after e.g. reboots as well.
     -a -- Filename to persist an auto-generated key, if -k is not used.
           Defaults to "/run/tofurkey.autokey".
-    -i -- Interval seconds for key rotation, default is 21600 (6 hours),
+    -i -- Interval seconds for key rotation, default is 21600,
           allowed range is 10 - 604800, must be even (daemon wakes up to rotate
           keys at every half-interval of unix time to manage validity overlaps)
     -v -- Verbose output to stderr

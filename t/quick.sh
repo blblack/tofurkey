@@ -16,7 +16,7 @@ if ! ${TEST_RUNNER} ./tofurkey -o -k t/test.key -P t/testout/fake_procfs -V -T 1
 fi
 
 # Results checks on the log
-if ! grep -q 'procfs write: \[1000000] (1st half) 82622c1b-b09d71c9-148e70d4-1dab6d02,e6a3d0b6-f85bc3bd-e1e7e044-94299bb3$' t/testout/log; then
+if ! grep -q 'procfs write: \[1000000] 82622c1b-b09d71c9-148e70d4-1dab6d02,e6a3d0b6-f85bc3bd-e1e7e044-94299bb3$' t/testout/log; then
     echo BASIC: grep check of key contents from t/testout/log failed!
     exit 42
 fi
@@ -35,7 +35,7 @@ if ! ${TEST_RUNNER} ./tofurkey -o -a t/test.key -P t/testout/fake_procfs -V -T 1
 fi
 
 # Results checks on the log
-if ! grep -q 'procfs write: \[1000000] (1st half) 82622c1b-b09d71c9-148e70d4-1dab6d02,e6a3d0b6-f85bc3bd-e1e7e044-94299bb3$' t/testout/log; then
+if ! grep -q 'procfs write: \[1000000] 82622c1b-b09d71c9-148e70d4-1dab6d02,e6a3d0b6-f85bc3bd-e1e7e044-94299bb3$' t/testout/log; then
     echo AUTOKEY-FIX: grep check of key contents from t/testout/log failed!
     exit 42
 fi
