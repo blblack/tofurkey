@@ -74,7 +74,7 @@
 // only ~3 seconds of room (after the offset) before the next firing.  The time
 // math also asserts on this minimum for functional reasons!
 #define MIN_IVAL 10
-#define DEF_IVAL 21600
+#define DEF_IVAL 86400
 #define MAX_IVAL 604800
 
 // Min/max real wall clock time we'll accept as legitimate and sane from

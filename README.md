@@ -49,7 +49,7 @@ it with fatal signals such as SIGTERM.
           and persisted across runs, but perhaps not across reboots at the
           default path, and obviously affords no possibility of distributed
           sync across a cluster. Mutually exclusive with -k.
-    -i -- Interval seconds for key rotation, default is 21600, allowed range
+    -i -- Interval seconds for key rotation, default is 86400, allowed range
           is 10 - 604800, must be even. Daemon wakes up to rotate keys at every
           half-interval of unix time to manage validity overlaps. Intervals
           *must* match across a cluster to get the same keys!
@@ -123,8 +123,8 @@ the unix wall clock time:
 
 Clients will pick up cookies with roughly one full interval of validity
 on the underlying key, on average, and it will always be in the range of
-0.5-1.5 intervals of validity. For the default 6h interval, the range
-would be ~3-9 hours of validity.
+0.5-1.5 intervals of validity. For the default 24h interval, the range
+would be ~12-36 hours of validity.
 
 ## Building
 

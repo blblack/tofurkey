@@ -16,14 +16,14 @@ if ! ${TEST_RUNNER} ./tofurkey -o -k t/test.key -P t/testout/fake_procfs -V -T 1
 fi
 
 # Results checks on the log
-if ! grep -q 'procfs write: \[1000000] 82622c1b-b09d71c9-148e70d4-1dab6d02,e6a3d0b6-f85bc3bd-e1e7e044-94299bb3$' t/testout/log; then
+if ! grep -q 'procfs write: \[1000000] c998252e-8f89667d-31961e08-3897526b,1c9ca1a5-9d295055-f8e3d4df-7107b577$' t/testout/log; then
     echo BASIC: grep check of key contents from t/testout/log failed!
     exit 42
 fi
 
 # Results checks on the fake procfs output
 PROCFS_CONTENTS=$(cat t/testout/fake_procfs)
-if [ "${PROCFS_CONTENTS}" != "82622c1b-b09d71c9-148e70d4-1dab6d02,e6a3d0b6-f85bc3bd-e1e7e044-94299bb3" ]; then
+if [ "${PROCFS_CONTENTS}" != "c998252e-8f89667d-31961e08-3897526b,1c9ca1a5-9d295055-f8e3d4df-7107b577" ]; then
     echo BASIC: Contents of fake procfs output are wrong!
     exit 42
 fi
@@ -35,14 +35,14 @@ if ! ${TEST_RUNNER} ./tofurkey -o -a t/test.key -P t/testout/fake_procfs -V -T 1
 fi
 
 # Results checks on the log
-if ! grep -q 'procfs write: \[1000000] 82622c1b-b09d71c9-148e70d4-1dab6d02,e6a3d0b6-f85bc3bd-e1e7e044-94299bb3$' t/testout/log; then
+if ! grep -q 'procfs write: \[1000000] c998252e-8f89667d-31961e08-3897526b,1c9ca1a5-9d295055-f8e3d4df-7107b577$' t/testout/log; then
     echo AUTOKEY-FIX: grep check of key contents from t/testout/log failed!
     exit 42
 fi
 
 # Results checks on the fake procfs output
 PROCFS_CONTENTS2=$(cat t/testout/fake_procfs)
-if [ "${PROCFS_CONTENTS2}" != "82622c1b-b09d71c9-148e70d4-1dab6d02,e6a3d0b6-f85bc3bd-e1e7e044-94299bb3" ]; then
+if [ "${PROCFS_CONTENTS2}" != "c998252e-8f89667d-31961e08-3897526b,1c9ca1a5-9d295055-f8e3d4df-7107b577" ]; then
     echo AUTOKEY-FIX: Contents of fake procfs output are wrong!
     exit 42
 fi

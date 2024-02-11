@@ -45,7 +45,7 @@ default path, and obviously affords no possibility of distributed
 sync across a cluster. Mutually exclusive with \-k.
 .TP
 \fB\-i\fR
-Interval seconds for key rotation, default is 21600, allowed range is
+Interval seconds for key rotation, default is 86400, allowed range is
 10 \- 604800, must be even. Daemon wakes up to rotate keys at every
 half-interval of unix time to manage validity overlaps.
 Intervals \fBmust\fR match across a cluster to get the same keys!
