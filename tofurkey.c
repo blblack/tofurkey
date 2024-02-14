@@ -448,7 +448,7 @@ static void usage(void)
             "-o -- One-shot mode - it will calculate the current keys and set them once\n"
             "      and then exit. Normal mode is to remain running and rotate keys on\n"
             "      timer intervals forever.\n"
-            "This is tofurkey v1.0.2\n"
+            "This is tofurkey v1.1.0\n"
             "tofurkey is a tool for distributed sync of Linux TCP Fastopen key rotations\n"
             "More info is available at https://github.com/blblack/tofurkey\n",
             def_autokey_path, def_autokey_path

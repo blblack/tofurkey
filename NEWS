@@ -1,3 +1,19 @@
+1.1.0 - 2024-02-13
+    * libev dependency removed.  The timing loop is now done manually, and
+      just as correctly AFAIK, via clock_gettime() and clock_nanosleep().
+      This makes everything simpler all around, but I wasn't confident in
+      this mechanism until I explored the option a bit more!
+    * Default interval changed from 6h to 24h.  Deploying this version will
+      cause a rift in your keys if you're using the default interval.
+    * Some stderr log outputs cleaned up a bit.
+    * The CLI options used for software testing (-[VPT]) are no longer
+      documented in README.md or the CLI usage output, but they are
+      present in the man page in a separate section.  Also, -T now
+      always implies -o.
+    * The options -k and -a are now explicitly mutually exclusive.
+    * Various internal refactorings to improve code quality, etc.
+    * Documentation updated for clarity.
+
 1.0.2 - 2024-02-07
     * Made the error messages for certain kinds of read() and write() failures
       less-confusing and more-informative.
