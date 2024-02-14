@@ -118,6 +118,7 @@ struct cfg {
 };
 
 // Helpers to block/restore signals around sensitive code paths
+F_NONNULL
 static void block_all_signals(sigset_t* saved_sigs)
 {
     sigset_t sigmask_all;
@@ -127,6 +128,7 @@ static void block_all_signals(sigset_t* saved_sigs)
         log_fatal("sigprocmask() failed: %s", strerror(errno));
 }
 
+F_NONNULL
 static void restore_signals(const sigset_t* saved_sigs)
 {
     if (sigprocmask(SIG_SETMASK, saved_sigs, NULL))
@@ -241,6 +243,7 @@ static void convert_keys_ascii(char keys_ascii[static restrict TFO_ASCII_ALLOC],
 }
 
 // CLOCK_REALTIME, ignoring nanoseconds, range-validated, converted to i64
+F_NONNULL
 static int64_t realtime_i64(const struct cfg* cfg_p)
 {
     if (cfg_p->fake_time)
@@ -255,6 +258,7 @@ static int64_t realtime_i64(const struct cfg* cfg_p)
 }
 
 // The inner, security-sensitive part of set_keys()
+F_NONNULL
 static void set_keys_secure(const struct cfg* cfg_p, const int64_t now,
                             const int64_t ctr_primary, const int64_t ctr_backup)
 {
@@ -526,6 +530,7 @@ static void parse_args(const int argc, char** argv, struct cfg* cfg_p)
         usage();
 }
 
+F_NONNULL
 static void cfg_cleanup(struct cfg* cfg_p)
 {
     free(cfg_p->main_key_path);
