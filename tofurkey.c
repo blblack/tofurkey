@@ -30,9 +30,7 @@
 #include <errno.h>
 #include <assert.h>
 
-// libsodium + libev
 #include <sodium.h>
-#include <ev.h>
 
 // Defines RUNDIR macro from rundir=x Makefile argument
 #include "rundir.inc"
@@ -63,6 +61,29 @@
 // 64 bytes of hex digits plus 6x dashes, 1x comma, and 1x NUL = 72
 #define TFO_ASCII_ALLOC 72U
 
+// These timer "fudge" values are used to add an extra ~2.02s to the wake time
+// for some insurance against various inaccuracies. Waking up slightly-late is
+// fine, but waking up slight-early is not!
+#define FUDGE_S 2
+#define FUDGE_NS (20 * 1000 * 1000) // 20ms
+
+// Min/def/max user-specified interval values.  While the upper bound is fairly
+// arbitrary, the lower bound really should not go any lower than ~10s!  Given
+// that the interval is cut in half for timers and there's a fixed 2.02s
+// offset, this means with the min of 10, we'll be firing every 5 seconds with
+// only ~3 seconds of room (after the offset) before the next firing.  The time
+// math also asserts on this minimum for functional reasons!
+#define MIN_IVAL 10
+#define DEF_IVAL 86400
+#define MAX_IVAL 604800
+
+// Min/max real wall clock time we'll accept as legitimate and sane from
+// clock_gettime(CLOCK_REALTIME) and also from our -T fake testing time.
+// It's important that it can't go negative, doesn't get anywhere near
+// saturating int64_t, and that the min is larger than MIN_IVAL above.
+#define MIN_REAL_TIME 1000000      // ~ Jan 12, 1970
+#define MAX_REAL_TIME 100000000000 // ~ Nov 16, 5138
+
 // Default pathnames:
 static const char def_autokey_path[] = RUNDIR "/tofurkey.autokey";
 static const char def_procfs_path[] = "/proc/sys/net/ipv4/tcp_fastopen_key";
@@ -78,23 +99,39 @@ _Static_assert(crypto_kdf_blake2b_KEYBYTES == 32U, "b2b has 32 key bytes");
 _Static_assert(TFO_KEY_LEN >= crypto_kdf_blake2b_BYTES_MIN, "TFO_KEY_LEN >= b2b min");
 _Static_assert(TFO_KEY_LEN <= crypto_kdf_blake2b_BYTES_MAX, "TFO_KEY_LEN <= b2b max");
 
-// This is set by the signal handler for terminal signals, and consumed as the
-// correct signal to re-raise for final termination
-static int killed_by = 0;
+// Stringify magic
+#define STR_(x) #x
+#define STR(x) STR_(x)
 
 // Structure carrying fixed configuration from CLI down to functional parts
 struct cfg {
     char* main_key_path;
     char* procfs_path;
     char* autokey_path;
-    uint64_t fake_time;
-    uint64_t interval;
-    uint64_t half_interval; // derived from above for convenience
+    int64_t fake_time;
+    int64_t interval;
+    int64_t half_interval; // derived from above for convenience
     bool verbose;
     bool verbose_leaky;
     bool dry_run;
     bool one_shot;
 };
+
+// Helpers to block/restore signals around sensitive code paths
+static void block_all_signals(sigset_t* saved_sigs)
+{
+    sigset_t sigmask_all;
+    sigfillset(&sigmask_all);
+    sigemptyset(saved_sigs);
+    if (sigprocmask(SIG_SETMASK, &sigmask_all, saved_sigs))
+        log_fatal("sigprocmask() failed: %s", strerror(errno));
+}
+
+static void restore_signals(const sigset_t* saved_sigs)
+{
+    if (sigprocmask(SIG_SETMASK, saved_sigs, NULL))
+        log_fatal("sigprocmask() failed: %s", strerror(errno));
+}
 
 // Safely read the main key file. If anything goes amiss, main_key will be
 // wiped (if we even attempted a read) and the error will be logged to stderr.
@@ -103,6 +140,8 @@ F_NONNULL
 static bool safe_read_keyfile(uint8_t main_key[static restrict crypto_kdf_blake2b_KEYBYTES],
                               const char* restrict main_key_path)
 {
+    const size_t klen = crypto_kdf_blake2b_KEYBYTES; // for brevity below
+
     const int key_fd = open(main_key_path, O_CLOEXEC | O_RDONLY);
     if (key_fd < 0) {
         log_info("open(%s) failed: %s", main_key_path, strerror(errno));
@@ -110,76 +149,73 @@ static bool safe_read_keyfile(uint8_t main_key[static restrict crypto_kdf_blake2
     }
 
     bool rv = false;
-    const ssize_t readrv = read(key_fd, main_key, crypto_kdf_blake2b_KEYBYTES);
-    if (readrv != crypto_kdf_blake2b_KEYBYTES) {
-        sodium_memzero(main_key, crypto_kdf_blake2b_KEYBYTES);
+    const ssize_t readrv = read(key_fd, main_key, klen);
+    if (readrv != (ssize_t)klen) {
+        sodium_memzero(main_key, klen);
         if (readrv < 0)
-            log_info("read(%s, %u) failed: %s",
-                     main_key_path, crypto_kdf_blake2b_KEYBYTES, strerror(errno));
+            log_info("read(%s, %zu) failed: %s", main_key_path, klen, strerror(errno));
         else
-            log_info("read(%s): wanted %u bytes, but got %zi bytes",
-                     main_key_path, crypto_kdf_blake2b_KEYBYTES, readrv);
+            log_info("read(%s): wanted %zu bytes, got %zi bytes", main_key_path, klen, readrv);
         rv = true;
     }
     if (close(key_fd)) {
-        sodium_memzero(main_key, crypto_kdf_blake2b_KEYBYTES);
+        sodium_memzero(main_key, klen);
         log_info("close(%s) failed: %s", main_key_path, strerror(errno));
         rv = true;
     }
     return rv;
 }
 
-// Safely write the keys to procfs, internally fatal after clearing/freeing the
-// secure storage
+// Safely write the keys to procfs, internally fatal after clearing storage
 F_NONNULL
 static void safe_write_procfs(char keys_ascii[static restrict TFO_ASCII_ALLOC],
                               const char* restrict procfs_path)
 {
+    const size_t klen = TFO_ASCII_ALLOC; // for brevity below
+
     const int procfs_fd = open(procfs_path, O_CLOEXEC | O_WRONLY);
     if (procfs_fd < 0) {
-        sodium_free(keys_ascii);
+        sodium_memzero(keys_ascii, klen);
         log_fatal("open(%s) failed: %s", procfs_path, strerror(errno));
     }
-    const ssize_t writerv = write(procfs_fd, keys_ascii, TFO_ASCII_ALLOC);
-    if (writerv != TFO_ASCII_ALLOC) {
-        sodium_free(keys_ascii);
+    const ssize_t writerv = write(procfs_fd, keys_ascii, klen);
+    if (writerv != (ssize_t)klen) {
+        sodium_memzero(keys_ascii, klen);
         if (writerv < 0)
-            log_fatal("write(%s, %u) failed: %s", procfs_path, TFO_ASCII_ALLOC, strerror(errno));
+            log_fatal("write(%s, %zu) failed: %s", procfs_path, klen, strerror(errno));
         else
-            log_fatal("write(%s): wanted %u bytes, but got %zi bytes",
-                      procfs_path, TFO_ASCII_ALLOC, writerv);
+            log_fatal("write(%s): wanted %zu bytes, got %zi bytes", procfs_path, klen, writerv);
     }
     if (close(procfs_fd)) {
-        sodium_free(keys_ascii);
+        sodium_memzero(keys_ascii, klen);
         log_fatal("close(%s) failed: %s", procfs_path, strerror(errno));
     }
 }
 
-// Safely write an autogenerated main key, internally fatal after
-// clearing/freeing the secure storage
+// Safely write an autogenerated main key, internally fatal after clearing storage
 F_NONNULL
 static void safe_write_autokey(uint8_t main_key[static restrict crypto_kdf_blake2b_KEYBYTES],
                                const char* restrict autokey_path)
 {
+    const size_t klen = crypto_kdf_blake2b_KEYBYTES; // for brevity below
+
     const int autokey_fd = open(autokey_path,
                                 O_CLOEXEC | O_WRONLY | O_CREAT | O_TRUNC | O_SYNC,
                                 S_IRUSR | S_IWUSR);
     if (autokey_fd < 0) {
-        sodium_free(main_key);
+        sodium_memzero(main_key, klen);
         log_fatal("open(%s) failed: %s", autokey_path, strerror(errno));
     }
-    const ssize_t writerv = write(autokey_fd, main_key, crypto_kdf_blake2b_KEYBYTES);
-    if (writerv != crypto_kdf_blake2b_KEYBYTES) {
-        sodium_free(main_key);
+    const ssize_t writerv = write(autokey_fd, main_key, klen);
+    if (writerv != (ssize_t)klen) {
+        sodium_memzero(main_key, klen);
         if (writerv < 0)
-            log_fatal("write(%s, %u) failed: %s", autokey_path,
-                      crypto_kdf_blake2b_KEYBYTES, strerror(errno));
+            log_fatal("write(%s, %zu) failed: %s", autokey_path, klen, strerror(errno));
         else
-            log_fatal("write(%s): wanted %u bytes, but got %zi bytes",
-                      autokey_path, crypto_kdf_blake2b_KEYBYTES, writerv);
+            log_fatal("write(%s): wanted %zu bytes, got %zi bytes", autokey_path, klen, writerv);
     }
     if (close(autokey_fd)) {
-        sodium_free(main_key);
+        sodium_memzero(main_key, klen);
         log_fatal("close(%s) failed: %s", autokey_path, strerror(errno));
     }
 }
@@ -204,97 +240,109 @@ static void convert_keys_ascii(char keys_ascii[static restrict TFO_ASCII_ALLOC],
 #undef H8_
 }
 
-// Detect whether "now" lands in the second (or first) half of the current
-// interval period, for switching how we manage the current "backup" key
-// written to procfs for smooth rollovers.
-static bool detect_second_half(const struct cfg* cfg_p,
-                               const uint64_t now, const uint64_t ctr_primary)
+// CLOCK_REALTIME, ignoring nanoseconds, range-validated, converted to i64
+static int64_t realtime_i64(const struct cfg* cfg_p)
 {
+    if (cfg_p->fake_time)
+        return cfg_p->fake_time;
+    struct timespec ts = { 0 };
+    if (clock_gettime(CLOCK_REALTIME, &ts))
+        log_fatal("clock_gettime(CLOCK_REALTIME) failed: %s", strerror(errno));
+    const int64_t secs = (int64_t)ts.tv_sec;
+    if (secs < MIN_REAL_TIME || secs > MAX_REAL_TIME)
+        log_fatal("Bad wall clock unix time %" PRIi64, secs);
+    return secs;
+}
+
+// The inner, security-sensitive part of set_keys()
+static void set_keys_secure(const struct cfg* cfg_p, const int64_t now,
+                            const int64_t ctr_primary, const int64_t ctr_backup)
+{
+    sigset_t saved_sigs;
+    block_all_signals(&saved_sigs);
+
+    // Allocate secure storage for all key materials
+    struct keys {
+        uint8_t main[crypto_kdf_blake2b_KEYBYTES];
+        uint8_t primary[TFO_KEY_LEN];
+        uint8_t backup[TFO_KEY_LEN];
+        char ascii[TFO_ASCII_ALLOC];
+    };
+    struct keys* k = sodium_malloc(sizeof(*k));
+    if (!k)
+        log_fatal("sodium_malloc() failed: %s", strerror(errno));
+
+    // Now read in the long-term main key file and generate our pair of ephemeral keys:
+    if (safe_read_keyfile(k->main, cfg_p->main_key_path))
+        log_fatal("Could not read key file %s", cfg_p->main_key_path);
+
+    // generate the pair of timed keys to set
+    crypto_kdf_blake2b_derive_from_key(k->primary, sizeof(k->primary),
+                                       (uint64_t)ctr_primary, kdf_ctx, k->main);
+    crypto_kdf_blake2b_derive_from_key(k->backup, sizeof(k->primary),
+                                       (uint64_t)ctr_backup, kdf_ctx, k->main);
+
+    // Wipe keys as we stop needing them from here down:
+    sodium_memzero(k->main, sizeof(k->main));
+    convert_keys_ascii(k->ascii, k->primary, k->backup);
+    sodium_memzero(k->primary, sizeof(k->primary));
+    sodium_memzero(k->backup, sizeof(k->backup));
+    if (cfg_p->verbose_leaky)
+        log_verbose("Generated ASCII TFO keys for procfs write: "
+                    "[%" PRIi64 "] %s", now, k->ascii);
+    if (!cfg_p->dry_run)
+        safe_write_procfs(k->ascii, cfg_p->procfs_path);
+    sodium_memzero(k->ascii, sizeof(k->ascii)); // redundant, for clarity/consistency
+    sodium_free(k);
+    restore_signals(&saved_sigs);
+    if (cfg_p->dry_run)
+        log_verbose("Did not write to procfs because dry-run (-n) was specified");
+}
+
+// Do the idempotent key generation + deployment based on current wall clock
+// (even if it's not exactly when we would've woken up), then returns the next
+// time we should wake up to rotate
+F_NONNULL
+static int64_t set_keys(const struct cfg* cfg_p)
+{
+    const int64_t now = realtime_i64(cfg_p);
+    log_info("Setting keys for unix time %" PRIi64, now);
+
+    // "ctr_primary" is a counter number for how many whole intervals have
+    // passed since unix time zero, and relies on the sanity checks here:
+    assert(cfg_p->interval >= MIN_IVAL); // enforced at cfg parse time
+    assert(now > cfg_p->interval); // current time is sane, should be way past interval
+    const int64_t ctr_primary = now / cfg_p->interval;
+    assert(ctr_primary > 0);
+
+    // Detect whether "now" lands in the second (or first) half of the current
+    // interval period, for switching how we manage the current "backup" key
+    // written to procfs for smooth rollovers.
+
     // "now_rounded_down" is the unix time exactly at the start of the current interval
-    const uint64_t now_rounded_down = ctr_primary * cfg_p->interval;
+    const int64_t now_rounded_down = ctr_primary * cfg_p->interval;
 
     // assert no overflow on the multiply above, and that the relationship is sane:
     assert(now_rounded_down / cfg_p->interval == ctr_primary);
     assert(now >= now_rounded_down);
 
     // Which half is determined by the time that has passed since now_rounded_down
-    const uint64_t leftover = now - now_rounded_down;
+    const int64_t leftover = now - now_rounded_down;
     assert(leftover < cfg_p->interval);
-    return (leftover >= cfg_p->half_interval);
-}
+    const bool second_half = (leftover >= cfg_p->half_interval);
 
-// Do the idempotent key generation + deployment
-F_NONNULL
-static void do_keys(const struct cfg* cfg_p)
-{
-    const uint64_t now = cfg_p->fake_time ? cfg_p->fake_time : (uint64_t)time(NULL);
-    log_info("Setting keys for unix time %" PRIu64, now);
+    // If we're past the middle of the interval, define "backup" as the next
+    // upcoming key else define "backup" as the previous key (primary is always current):
+    const int64_t ctr_backup = second_half ? ctr_primary + 1 : ctr_primary - 1;
 
-    // Allocate storage for various keys in various forms:
-    char* keys_ascii = sodium_malloc(TFO_ASCII_ALLOC);
-    if (!keys_ascii)
-        log_fatal("sodium_malloc() failed: %s", strerror(errno));
-    uint8_t* key_backup = sodium_malloc(TFO_KEY_LEN);
-    if (!key_backup)
-        log_fatal("sodium_malloc() failed: %s", strerror(errno));
-    uint8_t* key_primary = sodium_malloc(TFO_KEY_LEN);
-    if (!key_primary)
-        log_fatal("sodium_malloc() failed: %s", strerror(errno));
-    uint8_t* main_key = sodium_malloc(crypto_kdf_blake2b_KEYBYTES);
-    if (!main_key)
-        log_fatal("sodium_malloc() failed: %s", strerror(errno));
+    // Do the security-sensitive parts (loading, generating, writing keys)
+    set_keys_secure(cfg_p, now, ctr_primary, ctr_backup);
 
-    // "ctr_primary" is a counter number for how many whole intervals have
-    // passed since unix time zero, and relies on the sanity checks here:
-    assert(cfg_p->interval >= 10U); // enforced at cfg parse time
-    assert(now > cfg_p->interval); // current time is sane, should be way past interval
-    const uint64_t ctr_primary = now / cfg_p->interval;
-    assert(ctr_primary > 0);
-    const bool second_half = detect_second_half(cfg_p, now, ctr_primary);
-
-    // Block all signals until we're done with security-sensitive memory
-    sigset_t sigmask_all;
-    sigfillset(&sigmask_all);
-    sigset_t sigmask_prev;
-    sigemptyset(&sigmask_prev);
-    if (sigprocmask(SIG_SETMASK, &sigmask_all, &sigmask_prev))
-        log_fatal("sigprocmask() failed: %s", strerror(errno));
-
-    // Now read in the long-term main key file and generate our pair of ephemeral keys:
-    if (safe_read_keyfile(main_key, cfg_p->main_key_path)) {
-        sodium_free(main_key);
-        log_fatal("Could not read key file %s", cfg_p->main_key_path);
-    }
-
-    // primary key is always the one for the current interval:
-    crypto_kdf_blake2b_derive_from_key(key_primary, TFO_KEY_LEN, ctr_primary, kdf_ctx, main_key);
-    // If we're past the middle of the interval, define "backup" as the next upcoming key
-    // else define "backup" as the previous key:
-    const uint64_t ctr_backup = second_half ? ctr_primary + 1U : ctr_primary - 1U;
-    crypto_kdf_blake2b_derive_from_key(key_backup, TFO_KEY_LEN, ctr_backup, kdf_ctx, main_key);
-
-    // Wipe keys as we stop needing them from here down:
-    sodium_free(main_key);
-    convert_keys_ascii(keys_ascii, key_primary, key_backup);
-    sodium_free(key_primary);
-    sodium_free(key_backup);
-    if (cfg_p->verbose_leaky) {
-        const char* half = second_half ? "2nd" : "1st";
-        log_verbose("... Generated ASCII TFO keys for procfs write: "
-                    "[%" PRIu64 "] (%s half) %s", now, half, keys_ascii);
-    }
-    if (!cfg_p->dry_run)
-        safe_write_procfs(keys_ascii, cfg_p->procfs_path);
-    sodium_free(keys_ascii);
-
-    // Restore normal signal handling
-    if (sigprocmask(SIG_SETMASK, &sigmask_prev, NULL))
-        log_fatal("sigprocmask() failed: %s", strerror(errno));
-
-    if (cfg_p->dry_run)
-        log_verbose("... did not write to procfs because dry-run (-n) was specified");
-    if (!cfg_p->one_shot)
-        log_verbose("... done, waiting for next half-interval wakeup");
+    // return the next time value we should aim to wake up at, which is the
+    // next round half-interval
+    const int64_t to_add = second_half ? cfg_p->interval : cfg_p->half_interval;
+    const int64_t next_wake = now_rounded_down + to_add;
+    return next_wake;
 }
 
 F_NONNULL
@@ -304,27 +352,23 @@ static void autokey_setup(struct cfg* cfg_p)
     assert(!cfg_p->main_key_path); // no -k was given
 
     log_info("No -k argument was given, so this invocation will use a local, "
-             "autogenerated key at '%s'.  This will /not/ allow for "
+             "autogenerated key at '%s'. This will /not/ allow for "
              "synchronization across hosts!", cfg_p->autokey_path);
 
     // First, copy the autokey_path to the main key path, to make it trivial
     // for all other functions:
     cfg_p->main_key_path = strdup(cfg_p->autokey_path);
 
+    sigset_t saved_sigs;
+    block_all_signals(&saved_sigs);
+
+    // Allocate temporary main key storage
     uint8_t* main_key = sodium_malloc(crypto_kdf_blake2b_KEYBYTES);
     if (!main_key)
         log_fatal("sodium_malloc() failed: %s", strerror(errno));
 
-    // Block all signals until we're done with security-sensitive memory
-    sigset_t sigmask_all;
-    sigfillset(&sigmask_all);
-    sigset_t sigmask_prev;
-    sigemptyset(&sigmask_prev);
-    if (sigprocmask(SIG_SETMASK, &sigmask_all, &sigmask_prev))
-        log_fatal("sigprocmask() failed: %s", strerror(errno));
-
     // Do a trial read to determine if there's an existing autokey file which
-    // is usable.  If it's not usable, invent a random key and persist it.
+    // is usable. If it's not usable, invent a random key and persist it.
     if (safe_read_keyfile(main_key, cfg_p->main_key_path)) {
         log_info("Could not read autokey file %s, generating a new random one",
                  cfg_p->main_key_path);
@@ -333,30 +377,7 @@ static void autokey_setup(struct cfg* cfg_p)
     }
     sodium_free(main_key);
 
-    // Restore normal signal handling
-    if (sigprocmask(SIG_SETMASK, &sigmask_prev, NULL))
-        log_fatal("sigprocmask() failed: %s", strerror(errno));
-}
-
-F_NONNULL
-static void half_interval_cb(struct ev_loop* loop, ev_periodic* w, int revents)
-{
-    assert(loop);
-    assert(w->data);
-    assert(revents == EV_PERIODIC);
-    const struct cfg* cfg_p = (const struct cfg*)w->data;
-    do_keys(cfg_p);
-}
-
-F_NONNULL
-static void terminal_signal_cb(struct ev_loop* loop, struct ev_signal* w, const int revents)
-{
-    assert(loop);
-    assert(w->signum == SIGTERM || w->signum == SIGINT || w->signum == SIGHUP);
-    assert(revents == EV_SIGNAL);
-    log_info("Exiting cleanly on receipt of terminating signal %i", w->signum);
-    killed_by = w->signum;
-    ev_break(loop, EVBREAK_ALL);
+    restore_signals(&saved_sigs);
 }
 
 F_NONNULL
@@ -379,23 +400,23 @@ static void sysd_notify_ready(const char* spath)
         sun.sun_path[0] = 0;
 
     char msg[64];
-    int snp_rv = snprintf(msg, 64, "MAINPID=%lu\nREADY=1", (unsigned long)getpid());
+    const int snp_rv = snprintf(msg, 64, "MAINPID=%lu\nREADY=1", (unsigned long)getpid());
     if (snp_rv < 0 || snp_rv >= 64)
         log_fatal("BUG: snprintf()=>%i in sysd_notify_ready()", snp_rv);
 
-    int fd = socket(AF_UNIX, SOCK_DGRAM | SOCK_CLOEXEC, 0);
+    const int fd = socket(AF_UNIX, SOCK_DGRAM | SOCK_CLOEXEC, 0);
     if (fd < 0)
         log_fatal("Cannot create AF_UNIX socket");
 
     struct iovec iov = { .iov_base = msg, .iov_len = strlen(msg) };
-    struct msghdr m = {
+    const struct msghdr m = {
         .msg_iov = &iov,
         .msg_iovlen = 1,
         .msg_name = &sun,
         .msg_namelen = sun_len
     };
 
-    ssize_t sm_rv = sendmsg(fd, &m, MSG_NOSIGNAL);
+    const ssize_t sm_rv = sendmsg(fd, &m, MSG_NOSIGNAL);
     if (sm_rv < 0)
         log_fatal("sendmsg() to systemd NOTIFY_SOCKET failed: %s", strerror(errno));
 
@@ -406,35 +427,31 @@ static void sysd_notify_ready(const char* spath)
 static void usage(void)
 {
     fprintf(stderr,
-            "tofurkey [-vVno] [-T n] [-P %s]\n"
-            "         [-i seconds] [-a %s] [-k /path/to/main/secret]\n"
-            "-k -- Path to long-term main secret file. This file must have at least 32\n"
-            "      bytes of secret binary data, and will be re-read every time runtime\n"
-            "      TFO keys are generated. Without this option, the daemon will attempt\n"
-            "      to persist an automatic key to the rundir on startup, but this\n"
-            "      affords no possibility of distributed sync across a cluster, and may\n"
-            "      be regenerated after e.g. reboots as well.\n"
-            "-a -- Filename to persist an auto-generated key, if -k is not used.\n"
-            "      Defaults to %s\n"
-            "-i -- Interval seconds for key rotation, default is 21600 (6 hours),\n"
-            "      allowed range is 10 - 604800, must be even (daemon wakes up to rotate\n"
-            "      keys at every half-interval of unix time to manage validity overlaps)\n"
+            "tofurkey [-vno] [-i seconds] [-a %s] [-k /path/to/main/secret]\n"
+            "-k -- Path to long-term main secret file generated and distributed to a\n"
+            "      cluster by the administrator. This file must exist and have at least\n"
+            "      32 bytes of secret high-entropy binary data, and will be re-read every\n"
+            "      time TFO keys are generated. Mutually exclusive with -a. If this option\n"
+            "      is not provided, then the -a autokey mode is the default.\n"
+            "-a -- Custom pathname to persist an auto-generated key, defaults to\n"
+            "      '%s'. This file will be created if it's missing\n"
+            "      and persisted across runs, but perhaps not across reboots at the\n"
+            "      default path, and obviously affords no possibility of distributed\n"
+            "      sync across a cluster. Mutually exclusive with -k.\n"
+            "-i -- Interval seconds for key rotation, default is " STR(DEF_IVAL) ", allowed range\n"
+            "      is " STR(MIN_IVAL) " - " STR(MAX_IVAL) ", must be even. Daemon wakes up to rotate keys at\n"
+            "      every half-interval of unix time to manage validity overlaps.\n"
+            "      Intervals *must* match across a cluster to get the same keys!\n"
             "-v -- Verbose output to stderr\n"
             "-n -- Dry-run mode - Data is not actually written to procfs, but everything\n"
             "      else still happens\n"
             "-o -- One-shot mode - it will calculate the current keys and set them once\n"
-            "      and then exit. (normal mode is to remain running and rotate keys on\n"
-            "      timer intervals forever)\n"
-            "-V -- Verbose and also print TFO keys (mostly for testing, this leaks\n"
-            "      short-term secrets to stderr!)\n"
-            "-P -- Override default procfs output path for setting keys (mostly for\n"
-            "      testing)\n"
-            "-T -- Set a fake unix time value which never changes (mostly for testing,\n"
-            "      min value 1000000)\n\n"
-            "This is tofurkey v1.0.2\n"
-            "tofurkey is a tool for distributed sync of TCP Fastopen key rotations\n"
+            "      and then exit. Normal mode is to remain running and rotate keys on\n"
+            "      timer intervals forever.\n"
+            "This is tofurkey v1.1.0\n"
+            "tofurkey is a tool for distributed sync of Linux TCP Fastopen key rotations\n"
             "More info is available at https://github.com/blblack/tofurkey\n",
-            def_procfs_path, def_autokey_path, def_autokey_path
+            def_autokey_path, def_autokey_path
            );
     exit(2);
 }
@@ -445,11 +462,12 @@ static void parse_args(const int argc, char** argv, struct cfg* cfg_p)
     // Basic defaults:
     cfg_p->procfs_path = strdup(def_procfs_path);
     cfg_p->autokey_path = strdup(def_autokey_path);
-    cfg_p->interval = 21600U;
+    cfg_p->interval = DEF_IVAL;
     cfg_p->half_interval = cfg_p->interval >> 1U;
 
+    bool a_set = false;
     int optchar;
-    unsigned long long ullval;
+    long long llval;
     while ((optchar = getopt(argc, argv, "k:i:P:T:a:vVno"))) {
         switch (optchar) {
         case 'k':
@@ -464,21 +482,23 @@ static void parse_args(const int argc, char** argv, struct cfg* cfg_p)
         case 'a':
             free(cfg_p->autokey_path);
             cfg_p->autokey_path = strdup(optarg);
+            a_set = true;
             break;
         case 'i':
             errno = 0;
-            ullval = strtoull(optarg, NULL, 10);
-            if (errno || ullval < 10LLU || ullval > 604800LLU || ullval & 1U)
+            llval = strtoll(optarg, NULL, 10);
+            if (errno || llval < MIN_IVAL || llval > MAX_IVAL || llval & 1)
                 usage();
-            cfg_p->interval = (uint64_t)ullval;
+            cfg_p->interval = (int64_t)llval;
             cfg_p->half_interval = cfg_p->interval >> 1U;
             break;
         case 'T':
             errno = 0;
-            ullval = strtoul(optarg, NULL, 10);
-            if (errno || ullval < 1000000LLU)
+            llval = strtoll(optarg, NULL, 10);
+            if (errno || llval < MIN_REAL_TIME || llval > MAX_REAL_TIME)
                 usage();
-            cfg_p->fake_time = (uint64_t)ullval;
+            cfg_p->fake_time = (int64_t)llval;
+            cfg_p->one_shot = true;
             break;
         case 'v':
             cfg_p->verbose = true;
@@ -501,6 +521,9 @@ static void parse_args(const int argc, char** argv, struct cfg* cfg_p)
             usage();
         }
     }
+
+    if (a_set && cfg_p->main_key_path)
+        usage();
 }
 
 static void cfg_cleanup(struct cfg* cfg_p)
@@ -527,66 +550,32 @@ int main(int argc, char* argv[])
 
     // Initially set keys to whatever the current wall clock dictates, and exit
     // immediately if one-shot mode
-    do_keys(cfg_p);
-    if (cfg.one_shot) {
+    int64_t next_wake = set_keys(cfg_p);
+    if (!cfg.one_shot) {
+        // For the long-running case, notify systemd of readiness after the initial
+        // setting of keys above, iff NOTIFY_SOCKET was set in the environment by
+        // systemd. This allows systemd-level dependencies to work (if a network
+        // daemon binds to tofurkey.service, it can be assured the keys have been
+        // set before it starts).
+        const char* spath = getenv("NOTIFY_SOCKET");
+        if (spath)
+            sysd_notify_ready(spath);
+
+        // We hang out in this time loop until something kills us
+        log_verbose("Will set keys at each half-interval, when unix_time %%"
+                    " %" PRIi64 " ~= 2", cfg_p->half_interval);
+        while (1) {
+            const struct timespec next_ts = { .tv_sec = next_wake + FUDGE_S, .tv_nsec = FUDGE_NS };
+            log_verbose("Sleeping until next half-interval wakeup at %" PRIi64,
+                        (int64_t)next_ts.tv_sec);
+            const int cnrv = clock_nanosleep(CLOCK_REALTIME, TIMER_ABSTIME, &next_ts, NULL);
+            if (cnrv && errno != EINTR)
+                log_fatal("clock_nanosleep() failed: %s", strerror(errno));
+            next_wake = set_keys(cfg_p);
+        }
+    } else {
         log_info("Exiting due to one-shot mode (-o flag)");
-        cfg_cleanup(cfg_p);
-        return 0;
     }
-
-    // For the long-running case, notify systemd of readiness after the initial
-    // setting of keys above, iff NOTIFY_SOCKET was set in the environment by
-    // systemd.  This allows systemd-level dependencies to work (if a network
-    // daemon binds to tofurkey.service, it can be assured the keys have been
-    // set before it starts).
-    const char* spath = getenv("NOTIFY_SOCKET");
-    if (spath)
-        sysd_notify_ready(spath);
-
-    // create default ev loop
-    // (note: the libev dependency seems like overkill just to run a single
-    // periodic timer and handle death signals, but running such a timer
-    // accurately over a long period of time is actually quite tricky, so this
-    // saves a bunch of headache).
-    struct ev_loop* loop = ev_default_loop(EVFLAG_AUTO);
-    if (!loop)
-        log_fatal("Could not initialize the default libev loop");
-
-    // We run the periodic key update at approximately 2.02 seconds after every
-    // half-interval mark, as reassurance against minor time issues where e.g.
-    // poor system management of leap seconds might manage to trip up
-    // ev_periodic somehow (which is intended to handle them properly it sounds
-    // like, but I suspect there's still room for system-level administrative
-    // mistakes).
-    ev_periodic half_interval;
-    ev_periodic_init(&half_interval, half_interval_cb, 2.02, (double)cfg_p->half_interval, NULL);
-    half_interval.data = (void*)cfg_p;
-    ev_periodic_start(loop, &half_interval);
-
-    // terminal signal handlers
-    ev_signal sig_term;
-    ev_signal_init(&sig_term, terminal_signal_cb, SIGTERM);
-    ev_signal_start(loop, &sig_term);
-    ev_signal sig_int;
-    ev_signal_init(&sig_int, terminal_signal_cb, SIGINT);
-    ev_signal_start(loop, &sig_int);
-    ev_signal sig_hup;
-    ev_signal_init(&sig_hup, terminal_signal_cb, SIGHUP);
-    ev_signal_start(loop, &sig_hup);
-
-    // We spend all our runtime hanging out here until something kills us
-    log_verbose("Will set keys at each half-interval, when unix_time %%"
-                " %" PRIu64 " ~= 2", cfg_p->half_interval);
-    ev_run(loop, 0);
-
-    // Clean up and raise terminating signal, if any
-    ev_signal_stop(loop, &sig_hup);
-    ev_signal_stop(loop, &sig_int);
-    ev_signal_stop(loop, &sig_term);
-    ev_periodic_stop(loop, &half_interval);
-    ev_loop_destroy(loop);
     cfg_cleanup(cfg_p);
-    if (killed_by)
-        raise(killed_by);
     return 0;
 }
