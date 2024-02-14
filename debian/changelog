@@ -1,3 +1,10 @@
+tofurkey (1.1.0) experimental; urgency=low
+
+  * Update upstream to 1.1.0
+  * Note that the libev dependency has been removed!
+
+ -- Brandon L Black <blblack@gmail.com>  Tue, 13 Feb 2024 22:36:18 -0600
+
 tofurkey (1.0.2) experimental; urgency=low
 
   * Update upstream to 1.0.2
