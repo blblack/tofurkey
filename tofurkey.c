@@ -442,8 +442,8 @@ static void usage(void)
             "      and persisted across runs, but perhaps not across reboots at the\n"
             "      default path, and obviously affords no possibility of distributed\n"
             "      sync across a cluster. Mutually exclusive with -k.\n"
-            "-i -- Interval seconds for key rotation, default is " STR(DEF_IVAL) ", allowed range\n"
-            "      is " STR(MIN_IVAL) " - " STR(MAX_IVAL) ", must be even. Daemon wakes up to rotate keys at\n"
+            "-i -- Interval seconds for key rotation, default is %s, allowed range\n"
+            "      is %s - %s, must be even. Daemon wakes up to rotate keys at\n"
             "      every half-interval of unix time to manage validity overlaps.\n"
             "      Intervals *must* match across a cluster to get the same keys!\n"
             "-v -- Verbose output to stderr\n"
@@ -455,7 +455,7 @@ static void usage(void)
             "This is tofurkey v1.1.0\n"
             "tofurkey is a tool for distributed sync of Linux TCP Fastopen key rotations\n"
             "More info is available at https://github.com/blblack/tofurkey\n",
-            def_autokey_path, def_autokey_path
+            def_autokey_path, def_autokey_path, STR(DEF_IVAL), STR(MIN_IVAL), STR(MAX_IVAL)
            );
     exit(2);
 }
