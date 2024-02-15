@@ -574,8 +574,8 @@ int main(int argc, char* argv[])
             log_verbose("Sleeping until next half-interval wakeup at %" PRIi64,
                         (int64_t)next_ts.tv_sec);
             const int cnrv = clock_nanosleep(CLOCK_REALTIME, TIMER_ABSTIME, &next_ts, NULL);
-            if (cnrv && errno != EINTR)
-                log_fatal("clock_nanosleep() failed: %s", strerror(errno));
+            if (cnrv)
+                log_fatal("clock_nanosleep() failed: %s", strerror(cnrv));
             next_wake = set_keys(cfg_p);
         }
     } else {
