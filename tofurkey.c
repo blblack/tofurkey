@@ -175,7 +175,7 @@ static void safe_write_procfs(char keys_ascii[static restrict TFO_ASCII_ALLOC],
 {
     const size_t klen = TFO_ASCII_ALLOC; // for brevity below
 
-    const int procfs_fd = open(procfs_path, O_CLOEXEC | O_WRONLY);
+    const int procfs_fd = open(procfs_path, O_CLOEXEC | O_WRONLY | O_SYNC);
     if (procfs_fd < 0) {
         sodium_memzero(keys_ascii, klen);
         log_fatal("open(%s) failed: %s", procfs_path, strerror(errno));
