@@ -281,10 +281,16 @@ static void set_keys_secure(const struct cfg* cfg_p, const int64_t now,
         log_fatal("Could not read key file %s", cfg_p->main_key_path);
 
     // generate the pair of timed keys to set
-    crypto_kdf_blake2b_derive_from_key(k->primary, sizeof(k->primary),
-                                       (uint64_t)ctr_primary, kdf_ctx, k->main);
-    crypto_kdf_blake2b_derive_from_key(k->backup, sizeof(k->primary),
-                                       (uint64_t)ctr_backup, kdf_ctx, k->main);
+    if (crypto_kdf_blake2b_derive_from_key(k->primary, sizeof(k->primary),
+                                           (uint64_t)ctr_primary, kdf_ctx, k->main)) {
+        sodium_memzero(k, sizeof(*k));
+        log_fatal("b2b_derive_from_key failed");
+    }
+    if (crypto_kdf_blake2b_derive_from_key(k->backup, sizeof(k->primary),
+                                           (uint64_t)ctr_backup, kdf_ctx, k->main)) {
+        sodium_memzero(k, sizeof(*k));
+        log_fatal("b2b_derive_from_key failed");
+    }
 
     // Wipe keys as we stop needing them from here down:
     sodium_memzero(k->main, sizeof(k->main));
