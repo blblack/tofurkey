@@ -384,48 +384,39 @@ static void autokey_setup(struct cfg* cfg_p)
     restore_signals(&saved_sigs);
 }
 
-F_NONNULL
-static void sysd_notify_ready(const char* spath)
+// Notify systemd iff NOTIFY_SOCKET was set in the environment. This allows
+// systemd-level dependencies to work: if a network daemon binds/wants
+// tofurkey, it can be assured the keys have been initially set.
+static void sysd_notify_ready(void)
 {
-    /* Must be an abstract socket, or an absolute path */
-    if ((spath[0] != '@' && spath[0] != '/') || spath[1] == 0)
-        log_fatal("Invalid NOTIFY_SOCKET path '%s'", spath);
+    const char* spath = getenv("NOTIFY_SOCKET");
+    if (!spath)
+        return;
 
-    struct sockaddr_un sun = { 0 };
-    sun.sun_family = AF_UNIX;
+    // Must be an abstract socket or absolute path
+    if ((spath[0] != '@' && spath[0] != '/') || spath[1] == 0)
+        log_fatal("Invalid systemd NOTIFY_SOCKET path '%s'", spath);
+
+    struct sockaddr_un sun = { .sun_family = AF_UNIX };
     const size_t plen = strlen(spath) + 1U;
     if (plen > sizeof(sun.sun_path))
-        log_fatal("Implementation bug/limit: desired control socket path %s "
-                  "exceeds sun_path length of %zu", spath, sizeof(sun.sun_path));
+        log_fatal("systemd NOTIFY_SOCKET path '%s' exceeds sun_path length of %zu",
+                  spath, sizeof(sun.sun_path));
     memcpy(sun.sun_path, spath, plen);
-    const socklen_t sun_len = (socklen_t)(offsetof(struct sockaddr_un, sun_path) + plen);
-
+    const socklen_t sun_len = (socklen_t)sizeof(struct sockaddr_un);
     if (sun.sun_path[0] == '@')
         sun.sun_path[0] = 0;
 
-    char msg[64];
-    const int snp_rv = snprintf(msg, 64, "MAINPID=%lu\nREADY=1", (unsigned long)getpid());
-    if (snp_rv < 0 || snp_rv >= 64)
-        log_fatal("BUG: snprintf()=>%i in sysd_notify_ready()", snp_rv);
-
     const int fd = socket(AF_UNIX, SOCK_DGRAM | SOCK_CLOEXEC, 0);
     if (fd < 0)
-        log_fatal("Cannot create AF_UNIX socket");
-
-    struct iovec iov = { .iov_base = msg, .iov_len = strlen(msg) };
-    const struct msghdr m = {
-        .msg_iov = &iov,
-        .msg_iovlen = 1,
-        .msg_name = &sun,
-        .msg_namelen = sun_len
-    };
-
-    const ssize_t sm_rv = sendmsg(fd, &m, MSG_NOSIGNAL);
-    if (sm_rv < 0)
-        log_fatal("sendmsg() to systemd NOTIFY_SOCKET failed: %s", strerror(errno));
-
+        log_fatal("Cannot create unix dgram socket fd for systemd NOTIFY_SOCKET");
+    const ssize_t strv = sendto(fd, "READY=1", 7U, MSG_NOSIGNAL, &sun, sun_len);
+    if (strv < 0)
+        log_fatal("Cannot send READY=1 to systemd NOTIFY_SOCKET '%s': %s", spath, strerror(errno));
+    if (strv != 7)
+        log_fatal("Cannot send READY=1 to systemd NOTIFY_SOCKET '%s' (sent %zi/7 bytes)", spath, strv);
     if (close(fd))
-        log_fatal("close() of systemd NOTIFY_SOCKET failed: %s", strerror(errno));
+        log_fatal("close() of systemd NOTIFY_SOCKET '%s' failed: %s", spath, strerror(errno));
 }
 
 static void usage(void)
@@ -558,13 +549,8 @@ int main(int argc, char* argv[])
     int64_t next_wake = set_keys(cfg_p);
     if (!cfg.one_shot) {
         // For the long-running case, notify systemd of readiness after the initial
-        // setting of keys above, iff NOTIFY_SOCKET was set in the environment by
-        // systemd. This allows systemd-level dependencies to work (if a network
-        // daemon binds to tofurkey.service, it can be assured the keys have been
-        // set before it starts).
-        const char* spath = getenv("NOTIFY_SOCKET");
-        if (spath)
-            sysd_notify_ready(spath);
+        // setting of keys above.
+        sysd_notify_ready();
 
         // We hang out in this time loop until something kills us
         log_verbose("Will set keys at each half-interval, when unix_time %%"
