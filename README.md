@@ -38,27 +38,27 @@ it with fatal signals such as SIGTERM.
 
 ## Usage
 
-    tofurkey [-vno] [-i seconds] [-a /run/tofurkey.autokey] [-k /path/to/main/secret]
-    -k -- Path to long-term main secret file generated and distributed to a
-          cluster by the administrator. This file must exist and have at least
-          32 bytes of secret high-entropy binary data, and will be re-read
-          every time TFO keys are generated. Mutually exclusive with -a. If
-          this option is not provided, then the -a autokey mode is the default.
-    -a -- Custom pathname to persist an auto-generated key, defaults to
-          '/run/tofurkey.autokey'. This file will be created if it's missing
-          and persisted across runs, but perhaps not across reboots at the
-          default path, and obviously affords no possibility of distributed
-          sync across a cluster. Mutually exclusive with -k.
-    -i -- Interval seconds for key rotation, default is 86400, allowed range
-          is 10 - 604800, must be even. Daemon wakes up to rotate keys at every
-          half-interval of unix time to manage validity overlaps. Intervals
-          *must* match across a cluster to get the same keys!
-    -v -- Verbose output to stderr
-    -n -- Dry-run mode - Data is not actually written to procfs, but everything
-          else still happens
-    -o -- One-shot mode - it will calculate the current keys and set them once
-          and then exit. Normal mode is to remain running and rotate keys on
-          timer intervals forever.
+    Usage: tofurkey [-vno] [-i seconds] [-a /run/tofurkey.autokey] [-k /path/to/main/secret]
+      -k Path to long-term main secret file generated and distributed to a
+         cluster by the administrator. This file must exist and have at least
+         32 bytes of secret high-entropy binary data, and will be re-read every
+         time TFO keys are generated. Mutually exclusive with -a. If this option
+         is not provided, then the -a autokey mode is the default.
+      -a Custom pathname to persist an auto-generated key, defaults to
+         '/run/tofurkey.autokey'. This file will be created if it's missing
+         and persisted across runs, but perhaps not across reboots at the
+         default path, and obviously affords no possibility of distributed
+         sync across a cluster. Mutually exclusive with -k.
+      -i Interval seconds for key rotation, default is 86400, allowed range
+         is 10 - 604800, must be even. Daemon wakes up to rotate keys at
+         every half-interval of unix time to manage validity overlaps.
+         Intervals *must* match across a cluster to get the same keys!
+      -v Verbose output to stderr
+      -n Dry-run mode - Data is not actually written to procfs, but everything
+         else still happens
+      -o One-shot mode - it will calculate the current keys and set them once
+         and then exit. Normal mode is to remain running and rotate keys on
+         timer intervals forever.
 
 ## Generating and managing the main key
 
