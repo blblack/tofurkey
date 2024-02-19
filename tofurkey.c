@@ -305,8 +305,6 @@ static void set_keys_secure(const struct cfg* cfg_p, const int64_t now,
     sodium_memzero(k->ascii, sizeof(k->ascii)); // redundant, for clarity/consistency
     sodium_free(k);
     restore_signals(&saved_sigs);
-    if (cfg_p->dry_run)
-        log_verbose("Did not write to procfs because dry-run (-n) was specified");
 }
 
 // Do the idempotent key generation + deployment based on current wall clock
@@ -347,6 +345,8 @@ static int64_t set_keys(const struct cfg* cfg_p)
 
     // Do the security-sensitive parts (loading, generating, writing keys)
     set_keys_secure(cfg_p, now, ctr_primary, ctr_backup);
+    if (cfg_p->dry_run)
+        log_verbose("Did not write to procfs because dry-run (-n) was specified");
 
     // return the next time value we should aim to wake up at, which is the
     // next round half-interval
