@@ -242,7 +242,8 @@ static void convert_keys_ascii(char keys_ascii[static restrict TFO_ASCII_ALLOC],
 #undef H8_
 }
 
-// CLOCK_REALTIME, ignoring nanoseconds, range-validated, converted to i64
+// CLOCK_REALTIME, ignoring nanoseconds, range-validated, converted to i64, and
+// overridden by config if necc
 F_NONNULL
 static int64_t realtime_i64(const struct cfg* cfg_p)
 {
@@ -262,6 +263,8 @@ F_NONNULL
 static void set_keys_secure(const struct cfg* cfg_p, const int64_t now,
                             const int64_t ctr_primary, const int64_t ctr_backup)
 {
+    // Block signals while dealing with secure memory so that we always wipe
+    // before exiting on a clean terminating signal
     sigset_t saved_sigs;
     block_all_signals(&saved_sigs);
 
@@ -291,12 +294,13 @@ static void set_keys_secure(const struct cfg* cfg_p, const int64_t now,
         sodium_memzero(k, sizeof(*k));
         log_fatal("b2b_derive_from_key failed");
     }
-
-    // Wipe keys as we stop needing them from here down:
     sodium_memzero(k->main, sizeof(k->main));
+
+    // convert the pair to the procfs ASCII format
     convert_keys_ascii(k->ascii, k->primary, k->backup);
     sodium_memzero(k->primary, sizeof(k->primary));
     sodium_memzero(k->backup, sizeof(k->backup));
+
     if (cfg_p->verbose_leaky)
         log_verbose("Generated ASCII TFO keys for procfs write: "
                     "[%" PRIi64 "] %s", now, k->ascii);
@@ -369,6 +373,8 @@ static void autokey_setup(struct cfg* cfg_p)
     // for all other functions:
     cfg_p->main_key_path = strdup(cfg_p->autokey_path);
 
+    // Block signals while dealing with secure memory so that we always wipe
+    // before exiting on a clean terminating signal
     sigset_t saved_sigs;
     block_all_signals(&saved_sigs);
 
@@ -376,7 +382,6 @@ static void autokey_setup(struct cfg* cfg_p)
     uint8_t* main_key = sodium_malloc(crypto_kdf_blake2b_KEYBYTES);
     if (!main_key)
         log_fatal("sodium_malloc() failed: %s", strerror(errno));
-
     // Do a trial read to determine if there's an existing autokey file which
     // is usable. If it's not usable, invent a random key and persist it.
     if (safe_read_keyfile(main_key, cfg_p->main_key_path)) {
@@ -386,7 +391,6 @@ static void autokey_setup(struct cfg* cfg_p)
         safe_write_autokey(main_key, cfg_p->autokey_path);
     }
     sodium_free(main_key);
-
     restore_signals(&saved_sigs);
 }
 
