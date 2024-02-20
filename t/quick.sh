@@ -1,7 +1,9 @@
 #!/bin/sh
 
+BIN=./tofurkey
+
 # Setup
-if [ ! -f ./tofurkey ] || [ ! -d t ]; then
+if [ ! -f "${BIN}" ] || [ ! -d t ]; then
     echo Run this from the repo root after building!
     exit 42
 fi
@@ -10,7 +12,7 @@ touch t/testout/fake_procfs
 : "${TEST_RUNNER:=}"
 
 # Execution
-if ! ${TEST_RUNNER} ./tofurkey -o -k t/test.key -P t/testout/fake_procfs -V -T 1000000 >t/testout/log 2>&1; then
+if ! ${TEST_RUNNER} "${BIN}" -o -k t/test.key -P t/testout/fake_procfs -V -T 1000000 >t/testout/log 2>&1; then
     echo BASIC: tofurkey exited with failed status $?
     exit 42
 fi
@@ -29,7 +31,7 @@ if [ "${PROCFS_CONTENTS}" != "c998252e-8f89667d-31961e08-3897526b,1c9ca1a5-9d295
 fi
 
 # Run the same test again, just use -a to pick up the same fixed key as -k
-if ! ${TEST_RUNNER} ./tofurkey -o -a t/test.key -P t/testout/fake_procfs -V -T 1000000 >t/testout/log 2>&1; then
+if ! ${TEST_RUNNER} "${BIN}" -o -a t/test.key -P t/testout/fake_procfs -V -T 1000000 >t/testout/log 2>&1; then
     echo AUTOKEY-FIX: tofurkey exited with failed status $?
     exit 42
 fi
@@ -49,7 +51,7 @@ fi
 
 # Test creating a fresh, dynamic autokey
 rm -f t/testout/autokey
-if ! ${TEST_RUNNER} ./tofurkey -o -a t/testout/autokey -P t/testout/fake_procfs -V -T 1000000 >t/testout/log 2>&1; then
+if ! ${TEST_RUNNER} "${BIN}" -o -a t/testout/autokey -P t/testout/fake_procfs -V -T 1000000 >t/testout/log 2>&1; then
     echo AUTOKEY-DYN1: tofurkey exited with failed status $?
     exit 42
 fi
@@ -57,7 +59,7 @@ fi
 # Copy the procfs generated above and then re-run to see the same output when loading the key that was written above
 rm -f t/testout/fake_procfs.prev
 cp t/testout/fake_procfs t/testout/fake_procfs.prev
-if ! ${TEST_RUNNER} ./tofurkey -o -a t/testout/autokey -P t/testout/fake_procfs -V -T 1000000 >t/testout/log 2>&1; then
+if ! ${TEST_RUNNER} "${BIN}" -o -a t/testout/autokey -P t/testout/fake_procfs -V -T 1000000 >t/testout/log 2>&1; then
     echo AUTOKEY-DYN2: tofurkey exited with failed status $?
     exit 42
 fi

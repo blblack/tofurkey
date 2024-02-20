@@ -1,7 +1,9 @@
 #!/bin/bash
 
+BIN=./tofurkey
+
 # Setup
-if [[ ! -f ./tofurkey ]] || [[ ! -d t ]]; then
+if [[ ! -f "${BIN}" ]] || [[ ! -d t ]]; then
     echo Run this from the repo root after building!
     exit 42
 fi
@@ -12,7 +14,7 @@ echo Running slow test, takes at least 23 seconds...
 
 # Execution
 : "${TEST_RUNNER:=}"
-${TEST_RUNNER} ./tofurkey -i 10 -k t/test.key -P t/testout/fake_procfs -V >t/testout/log 2>&1 &
+${TEST_RUNNER} "${BIN}" -i 10 -k t/test.key -P t/testout/fake_procfs -V >t/testout/log 2>&1 &
 TOFURKEY_PID=$!
 
 sleep 23
