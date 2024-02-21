@@ -248,11 +248,10 @@ static void convert_keys_ascii(char keys_ascii[static restrict TFO_ASCII_ALLOC],
 
 // CLOCK_REALTIME, ignoring nanoseconds, range-validated, converted to u64, and
 // overridden by config if necc
-F_NONNULL
-static uint64_t realtime_u64(const struct cfg* cfg_p)
+static uint64_t realtime_u64(const uint64_t fake_time)
 {
-    if (cfg_p->fake_time)
-        return cfg_p->fake_time;
+    if (fake_time)
+        return fake_time;
     struct timespec ts = { 0 };
     if (clock_gettime(CLOCK_REALTIME, &ts))
         log_fatal("clock_gettime(CLOCK_REALTIME) failed: %s", strerror(errno));
@@ -320,7 +319,7 @@ static void set_keys_secure(const struct cfg* cfg_p, const uint64_t now,
 F_NONNULL
 static uint64_t set_keys(const struct cfg* cfg_p)
 {
-    const uint64_t now = realtime_u64(cfg_p);
+    const uint64_t now = realtime_u64(cfg_p->fake_time);
     log_info("Setting keys for unix time %" PRIu64, now);
 
     // "ctr_primary" is a counter number for how many whole intervals have
