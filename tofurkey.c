@@ -83,11 +83,17 @@
 #define MAX_IVAL 604800
 
 // Min/max real wall clock time we'll accept as legitimate and sane from
-// clock_gettime(CLOCK_REALTIME) and also from our -T fake testing time.
-// It's important that it can't go negative, doesn't get anywhere near
-// saturating uint64_t, and that the min is larger than MIN_IVAL above.
+// clock_gettime(CLOCK_REALTIME) and also from our -T fake testing time. It's
+// important that it can't go negative, that the min is larger than MAX_IVAL
+// above, and that our time values (after adding an interval and fudge factor)
+// can't saturate an i64)
 #define MIN_REAL_TIME 1000000      // ~ Jan 12, 1970
 #define MAX_REAL_TIME 100000000000 // ~ Nov 16, 5138
+_Static_assert(MIN_REAL_TIME > MAX_IVAL);
+_Static_assert(MAX_REAL_TIME + MAX_IVAL + FUDGE_S < INT64_MAX);
+// Assert that time_t (type of .tv_sec) can hold the same positive range as
+// int64_t. This code is intentionally not compatible with 32-bit time_t!
+_Static_assert(sizeof(time_t) >= sizeof(int64_t));
 
 // Default pathnames:
 static const char def_autokey_path[] = RUNDIR "/tofurkey.autokey";
@@ -322,6 +328,52 @@ static uint64_t realtime_u64(const uint64_t fake_time)
     return (uint64_t)ts.tv_sec;
 }
 
+// timecalc() is a pure numeric function that takes care of the critical
+// time-based calculations that are performed to create time-relevant keys.
+// All inputs and outputs are uint64_t.  It takes in "now" (current unix wall
+// time in seconds) and the configured interval, and outputs the two counter
+// values for primary and backup TFO key derivation as well as the wall time we
+// should next wake after in order to set keys again.
+
+struct tc_out {
+    uint64_t ctr_primary;
+    uint64_t ctr_backup;
+    uint64_t next_wake;
+};
+
+static struct tc_out timecalc(uint64_t now, uint64_t interval)
+{
+    // "ctr_primary" is a counter number for how many whole intervals have
+    // passed since unix time zero, and relies on the sanity checks here:
+    assert(interval >= MIN_IVAL); // enforced in parse_args
+    assert(now > interval); // enforced indirectly (args/gettime range limits + comptime assert on range relations)
+    const uint64_t ctr_primary = now / interval;
+    assert(ctr_primary > 0); // implicit, but maybe not compiler-obvious
+
+    // "now_rounded_down" is the unix time exactly at the start of the current interval
+    const uint64_t now_rounded_down = ctr_primary * interval; // incapable of overflow, see above
+    assert(now >= now_rounded_down); // implicit, but maybe not compiler-obvious
+
+    // Which half is determined by the time that has passed since now_rounded_down
+    const uint64_t leftover = now - now_rounded_down;
+    assert(leftover < interval); // implicit, but maybe not compiler-obvious
+    const uint64_t half_interval = interval >> 1;
+    const bool second_half = (leftover >= half_interval);
+
+    // If we're past the middle of the interval, define "backup" as the next
+    // upcoming key else define "backup" as the previous key (primary is always current):
+    const uint64_t ctr_backup = second_half ? ctr_primary + 1 : ctr_primary - 1;
+
+    // next time we should wake up after, which is the next round half-interval
+    const uint64_t to_add = second_half ? interval : half_interval;
+    const uint64_t next_wake = now_rounded_down + to_add;
+    return (struct tc_out) {
+        .ctr_primary = ctr_primary,
+        .ctr_backup = ctr_backup,
+        .next_wake = next_wake,
+    };
+}
+
 static void usage(void)
 {
     fprintf(stderr,
@@ -509,46 +561,11 @@ static uint64_t set_keys(const struct cfg* cfg_p)
 {
     const uint64_t now = realtime_u64(cfg_p->fake_time);
     log_info("Setting keys for unix time %" PRIu64, now);
-
-    // "ctr_primary" is a counter number for how many whole intervals have
-    // passed since unix time zero, and relies on the sanity checks here:
-    const uint64_t interval = cfg_p->interval;
-    assert(interval >= MIN_IVAL); // enforced at cfg parse time
-    assert(now > interval); // current time is sane, should be way past interval
-    const uint64_t ctr_primary = now / interval;
-    assert(ctr_primary > 0);
-
-    // Detect whether "now" lands in the second (or first) half of the current
-    // interval period, for switching how we manage the current "backup" key
-    // written to procfs for smooth rollovers.
-
-    // "now_rounded_down" is the unix time exactly at the start of the current interval
-    const uint64_t now_rounded_down = ctr_primary * interval;
-
-    // assert no overflow on the multiply above, and that the relationship is sane:
-    assert(now_rounded_down / interval == ctr_primary);
-    assert(now >= now_rounded_down);
-
-    // Which half is determined by the time that has passed since now_rounded_down
-    const uint64_t leftover = now - now_rounded_down;
-    assert(leftover < interval);
-    const uint64_t half_interval = interval >> 1;
-    const bool second_half = (leftover >= half_interval);
-
-    // If we're past the middle of the interval, define "backup" as the next
-    // upcoming key else define "backup" as the previous key (primary is always current):
-    const uint64_t ctr_backup = second_half ? ctr_primary + 1 : ctr_primary - 1;
-
-    // Do the security-sensitive parts (loading, generating, writing keys)
-    set_keys_secure(cfg_p, now, ctr_primary, ctr_backup);
+    struct tc_out tc = timecalc(now, cfg_p->interval);
+    set_keys_secure(cfg_p, now, tc.ctr_primary, tc.ctr_backup);
     if (cfg_p->dry_run)
         log_verbose("Did not write to procfs because dry-run (-n) was specified");
-
-    // return the next time value we should aim to wake up at, which is the
-    // next round half-interval
-    const uint64_t to_add = second_half ? interval : half_interval;
-    const uint64_t next_wake = now_rounded_down + to_add;
-    return next_wake;
+    return tc.next_wake;
 }
 
 int main(int argc, char* argv[])
