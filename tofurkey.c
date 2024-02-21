@@ -114,7 +114,6 @@ struct cfg {
     char* procfs_path;
     uint64_t fake_time;
     uint64_t interval;
-    uint64_t half_interval; // derived from above for convenience
     bool verbose;
     bool verbose_leaky;
     bool dry_run;
@@ -360,10 +359,6 @@ static void usage(void)
 F_NONNULL
 static void parse_args(const int argc, char** argv, struct cfg* cfg_p)
 {
-    // Basic defaults:
-    cfg_p->interval = DEF_IVAL;
-    cfg_p->half_interval = cfg_p->interval >> 1U;
-
     const char* arg_autokey = NULL;
     const char* arg_mainkey = NULL;
     const char* arg_procfs = NULL;
@@ -392,7 +387,6 @@ static void parse_args(const int argc, char** argv, struct cfg* cfg_p)
             if (errno || ullval < MIN_IVAL || ullval > MAX_IVAL || ullval & 1)
                 usage_err("Interval value '%s' unparseable, out of range, or odd", optarg);
             cfg_p->interval = (uint64_t)ullval;
-            cfg_p->half_interval = cfg_p->interval >> 1U;
             break;
         // These three are just for testsuite/debugging:
         case 'P':
@@ -425,6 +419,9 @@ static void parse_args(const int argc, char** argv, struct cfg* cfg_p)
 
     if (optind != argc)
         usage_err("Excess unknown CLI arguments after options");
+
+    if (!cfg_p->interval)
+        cfg_p->interval = DEF_IVAL;
 
     if (arg_procfs)
         cfg_p->procfs_path = strdup(arg_procfs);
@@ -515,9 +512,10 @@ static uint64_t set_keys(const struct cfg* cfg_p)
 
     // "ctr_primary" is a counter number for how many whole intervals have
     // passed since unix time zero, and relies on the sanity checks here:
-    assert(cfg_p->interval >= MIN_IVAL); // enforced at cfg parse time
-    assert(now > cfg_p->interval); // current time is sane, should be way past interval
-    const uint64_t ctr_primary = now / cfg_p->interval;
+    const uint64_t interval = cfg_p->interval;
+    assert(interval >= MIN_IVAL); // enforced at cfg parse time
+    assert(now > interval); // current time is sane, should be way past interval
+    const uint64_t ctr_primary = now / interval;
     assert(ctr_primary > 0);
 
     // Detect whether "now" lands in the second (or first) half of the current
@@ -525,16 +523,17 @@ static uint64_t set_keys(const struct cfg* cfg_p)
     // written to procfs for smooth rollovers.
 
     // "now_rounded_down" is the unix time exactly at the start of the current interval
-    const uint64_t now_rounded_down = ctr_primary * cfg_p->interval;
+    const uint64_t now_rounded_down = ctr_primary * interval;
 
     // assert no overflow on the multiply above, and that the relationship is sane:
-    assert(now_rounded_down / cfg_p->interval == ctr_primary);
+    assert(now_rounded_down / interval == ctr_primary);
     assert(now >= now_rounded_down);
 
     // Which half is determined by the time that has passed since now_rounded_down
     const uint64_t leftover = now - now_rounded_down;
-    assert(leftover < cfg_p->interval);
-    const bool second_half = (leftover >= cfg_p->half_interval);
+    assert(leftover < interval);
+    const uint64_t half_interval = interval >> 1;
+    const bool second_half = (leftover >= half_interval);
 
     // If we're past the middle of the interval, define "backup" as the next
     // upcoming key else define "backup" as the previous key (primary is always current):
@@ -547,7 +546,7 @@ static uint64_t set_keys(const struct cfg* cfg_p)
 
     // return the next time value we should aim to wake up at, which is the
     // next round half-interval
-    const uint64_t to_add = second_half ? cfg_p->interval : cfg_p->half_interval;
+    const uint64_t to_add = second_half ? interval : half_interval;
     const uint64_t next_wake = now_rounded_down + to_add;
     return next_wake;
 }
@@ -571,7 +570,7 @@ int main(int argc, char* argv[])
 
         // We hang out in this time loop until something kills us
         log_verbose("Will set keys at each half-interval, when unix_time %%"
-                    " %" PRIu64 " ~= 2", cfg_p->half_interval);
+                    " %" PRIu64 " ~= 2", cfg_p->interval >> 1);
         while (1) {
             const uint64_t next_fudged = next_wake + FUDGE_S;
             const struct timespec next_ts = { .tv_sec = (time_t)next_fudged, .tv_nsec = FUDGE_NS };
