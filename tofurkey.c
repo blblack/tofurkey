@@ -580,26 +580,28 @@ int main(int argc, char* argv[])
     // Initially set keys to whatever the current wall clock dictates, and exit
     // immediately if one-shot mode
     uint64_t next_wake = set_keys(cfg_p);
-    if (!cfg.one_shot) {
-        // For the long-running case, notify systemd of readiness after the initial
-        // setting of keys above.
-        sysd_notify_ready();
-
-        // We hang out in this time loop until something kills us
-        log_verbose("Will set keys at each half-interval, when unix_time %%"
-                    " %" PRIu64 " ~= 2", cfg_p->interval >> 1);
-        while (1) {
-            const uint64_t next_fudged = next_wake + FUDGE_S;
-            const struct timespec next_ts = { .tv_sec = (time_t)next_fudged, .tv_nsec = FUDGE_NS };
-            log_verbose("Sleeping until next half-interval wakeup at %" PRIu64, next_fudged);
-            const int cnrv = clock_nanosleep(CLOCK_REALTIME, TIMER_ABSTIME, &next_ts, NULL);
-            if (cnrv)
-                log_fatal("clock_nanosleep() failed: %s", strerror(cnrv));
-            next_wake = set_keys(cfg_p);
-        }
-    } else {
+    if (cfg.one_shot) {
         log_info("Exiting due to one-shot mode (-o flag)");
+        cfg_cleanup(cfg_p);
+        return 0;
     }
+    // For the long-running case, notify systemd of readiness after the initial
+    // setting of keys above.
+    sysd_notify_ready();
+
+    // We hang out in this time loop until something kills us
+    log_verbose("Will set keys at each half-interval, when unix_time %%"
+                " %" PRIu64 " ~= 2", cfg_p->interval >> 1);
+    while (1) {
+        const time_t next_fudged = (time_t)(next_wake + FUDGE_S);
+        const struct timespec next_ts = { .tv_sec = next_fudged, .tv_nsec = FUDGE_NS };
+        log_verbose("Sleeping until next half-interval wakeup at %" PRIu64, next_fudged);
+        const int cnrv = clock_nanosleep(CLOCK_REALTIME, TIMER_ABSTIME, &next_ts, NULL);
+        if (cnrv)
+            log_fatal("clock_nanosleep() failed: %s", strerror(cnrv));
+        next_wake = set_keys(cfg_p);
+    }
+    // unreachable, but is what we'd do if actually broke out of the loop
     cfg_cleanup(cfg_p);
     return 0;
 }
