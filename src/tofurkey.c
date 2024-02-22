@@ -404,7 +404,7 @@ static void usage(void)
             "     and then exit. Normal mode is to remain running and rotate keys on\n"
             "     timer intervals forever.\n"
             "\n"
-            "This is tofurkey v1.1.0\n"
+            "This is tofurkey v1.2.0\n"
             "tofurkey is a tool for distributed sync of Linux TCP Fastopen key rotations\n"
             "More info is available at https://github.com/blblack/tofurkey\n",
             def_autokey_path, def_autokey_path, STR(DEF_IVAL), STR(MIN_IVAL), STR(MAX_IVAL)
