@@ -314,12 +314,9 @@ static void convert_keys_ascii(char keys_ascii[static restrict TFO_ASCII_ALLOC],
 #undef H8_
 }
 
-// CLOCK_REALTIME, ignoring nanoseconds, range-validated, converted to u64, and
-// overridden by config if necc
-static uint64_t realtime_u64(const uint64_t fake_time)
+// CLOCK_REALTIME, ignoring nanoseconds, range-validated, converted to u64
+static uint64_t realtime_u64(void)
 {
-    if (fake_time)
-        return fake_time;
     struct timespec ts = { 0 };
     if (clock_gettime(CLOCK_REALTIME, &ts))
         log_fatal("clock_gettime(CLOCK_REALTIME) failed: %s", strerror(errno));
@@ -557,9 +554,8 @@ static void set_keys_secure(const struct cfg* cfg_p, const uint64_t now,
 // (even if it's not exactly when we would've woken up), then returns the next
 // time we should wake up to rotate
 F_NONNULL
-static uint64_t set_keys(const struct cfg* cfg_p)
+static uint64_t set_keys(const struct cfg* cfg_p, const uint64_t now)
 {
-    const uint64_t now = realtime_u64(cfg_p->fake_time);
     log_info("Setting keys for unix time %" PRIu64, now);
     const struct tc_out tc = timecalc(now, cfg_p->interval);
     set_keys_secure(cfg_p, now, tc.ctr_primary, tc.ctr_backup);
@@ -579,7 +575,8 @@ int main(int argc, char* argv[])
 
     // Initially set keys to whatever the current wall clock dictates, and exit
     // immediately if one-shot mode
-    uint64_t next_wake = set_keys(cfg_p);
+    const uint64_t initial_now = cfg_p->fake_time ? cfg_p->fake_time : realtime_u64();
+    uint64_t next_wake = set_keys(cfg_p, initial_now);
     if (cfg.one_shot) {
         log_info("Exiting due to one-shot mode (-o flag)");
         cfg_cleanup(&cfg);
@@ -599,7 +596,7 @@ int main(int argc, char* argv[])
         const int cnrv = clock_nanosleep(CLOCK_REALTIME, TIMER_ABSTIME, &next_ts, NULL);
         if (cnrv)
             log_fatal("clock_nanosleep() failed: %s", strerror(cnrv));
-        next_wake = set_keys(cfg_p);
+        next_wake = set_keys(cfg_p, realtime_u64());
     }
     // unreachable, but is what we'd do if actually broke out of the loop
     cfg_cleanup(&cfg);
