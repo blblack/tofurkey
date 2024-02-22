@@ -561,7 +561,7 @@ static uint64_t set_keys(const struct cfg* cfg_p)
 {
     const uint64_t now = realtime_u64(cfg_p->fake_time);
     log_info("Setting keys for unix time %" PRIu64, now);
-    struct tc_out tc = timecalc(now, cfg_p->interval);
+    const struct tc_out tc = timecalc(now, cfg_p->interval);
     set_keys_secure(cfg_p, now, tc.ctr_primary, tc.ctr_backup);
     if (cfg_p->dry_run)
         log_verbose("Did not write to procfs because dry-run (-n) was specified");
@@ -574,15 +574,15 @@ int main(int argc, char* argv[])
         log_fatal("Could not initialize libsodium!");
 
     struct cfg cfg = { 0 };
-    struct cfg* cfg_p = &cfg; // ptr for consistency in log_foo() macros
-    parse_args(argc, argv, cfg_p);
+    const struct cfg* cfg_p = &cfg; // ptr for consistency in log_foo() macros
+    parse_args(argc, argv, &cfg);
 
     // Initially set keys to whatever the current wall clock dictates, and exit
     // immediately if one-shot mode
     uint64_t next_wake = set_keys(cfg_p);
     if (cfg.one_shot) {
         log_info("Exiting due to one-shot mode (-o flag)");
-        cfg_cleanup(cfg_p);
+        cfg_cleanup(&cfg);
         return 0;
     }
     // For the long-running case, notify systemd of readiness after the initial
@@ -602,6 +602,6 @@ int main(int argc, char* argv[])
         next_wake = set_keys(cfg_p);
     }
     // unreachable, but is what we'd do if actually broke out of the loop
-    cfg_cleanup(cfg_p);
+    cfg_cleanup(&cfg);
     return 0;
 }
