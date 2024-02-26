@@ -188,7 +188,7 @@ static bool safe_read_key(uint8_t mainkey[static restrict crypto_kdf_blake2b_KEY
 {
     const size_t klen = crypto_kdf_blake2b_KEYBYTES; // for brevity below
 
-    const int key_fd = open(mainkey_path, O_CLOEXEC | O_RDONLY);
+    const int key_fd = open(mainkey_path, O_RDONLY | O_CLOEXEC);
     if (key_fd < 0) {
         log_info("open(%s) failed: %s", mainkey_path, strerror(errno));
         return true;
@@ -219,7 +219,7 @@ static void safe_write_procfs(char keys_ascii[static restrict TFO_ASCII_ALLOC],
 {
     const size_t klen = TFO_ASCII_ALLOC; // for brevity below
 
-    const int procfs_fd = open(procfs_path, O_CLOEXEC | O_WRONLY | O_SYNC);
+    const int procfs_fd = open(procfs_path, O_WRONLY | O_SYNC | O_CLOEXEC);
     if (procfs_fd < 0) {
         sodium_memzero(keys_ascii, klen);
         log_fatal("open(%s) failed: %s", procfs_path, strerror(errno));
@@ -246,7 +246,7 @@ static void safe_write_autokey(uint8_t mainkey[static restrict crypto_kdf_blake2
     const size_t klen = crypto_kdf_blake2b_KEYBYTES; // for brevity below
 
     const int autokey_fd = open(autokey_path,
-                                O_CLOEXEC | O_WRONLY | O_CREAT | O_TRUNC | O_SYNC,
+                                O_WRONLY | O_CREAT | O_TRUNC | O_SYNC | O_CLOEXEC,
                                 S_IRUSR | S_IWUSR);
     if (autokey_fd < 0) {
         sodium_memzero(mainkey, klen);
