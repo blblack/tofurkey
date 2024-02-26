@@ -120,18 +120,6 @@ _Static_assert(crypto_kdf_blake2b_KEYBYTES == 32U, "b2b has 32 key bytes");
 _Static_assert(TFO_KEY_LEN >= crypto_kdf_blake2b_BYTES_MIN, "TFO_KEY_LEN >= b2b min");
 _Static_assert(TFO_KEY_LEN <= crypto_kdf_blake2b_BYTES_MAX, "TFO_KEY_LEN <= b2b max");
 
-// Structure carrying fixed configuration from CLI down to functional parts
-struct cfg {
-    char* mainkey_path;
-    char* procfs_path;
-    uint64_t fake_time;
-    uint64_t interval;
-    bool verbose;
-    bool verbose_leaky;
-    bool dry_run;
-    bool one_shot;
-};
-
 // Helpers to block/restore signals around sensitive code paths
 F_NONNULL
 static void block_all_signals(sigset_t* saved_sigs)
@@ -377,6 +365,18 @@ static struct tc_out timecalc(uint64_t now, uint64_t interval)
         .next_wake = next_wake,
     };
 }
+
+// Structure carrying fixed configuration from CLI down to functional parts
+struct cfg {
+    char* mainkey_path;
+    char* procfs_path;
+    uint64_t fake_time;
+    uint64_t interval;
+    bool verbose;
+    bool verbose_leaky;
+    bool dry_run;
+    bool one_shot;
+};
 
 static void usage(void)
 {
