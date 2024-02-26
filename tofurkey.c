@@ -58,6 +58,10 @@
         fprintf(stderr, "info: " fmt_ "\n", ##__VA_ARGS__);\
 } while(0)
 
+// Stringify magic for usage output
+#define STR_(x) #x
+#define STR(x) STR_(x)
+
 // The data length of a single ephemeral TFO key in binary form
 #define TFO_KEY_LEN 16U
 
@@ -115,10 +119,6 @@ _Static_assert(crypto_kdf_blake2b_CONTEXTBYTES == 8U, "b2b has 8 ctx bytes");
 _Static_assert(crypto_kdf_blake2b_KEYBYTES == 32U, "b2b has 32 key bytes");
 _Static_assert(TFO_KEY_LEN >= crypto_kdf_blake2b_BYTES_MIN, "TFO_KEY_LEN >= b2b min");
 _Static_assert(TFO_KEY_LEN <= crypto_kdf_blake2b_BYTES_MAX, "TFO_KEY_LEN <= b2b max");
-
-// Stringify magic
-#define STR_(x) #x
-#define STR(x) STR_(x)
 
 // Structure carrying fixed configuration from CLI down to functional parts
 struct cfg {
