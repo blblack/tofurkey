@@ -279,7 +279,8 @@ static void autokey_setup(const char* mainkey_path)
     block_all_signals(&saved_sigs);
 
     // Allocate temporary main key storage
-    uint8_t* mainkey = sodium_malloc(crypto_kdf_blake2b_KEYBYTES);
+    const size_t klen = crypto_kdf_blake2b_KEYBYTES;
+    uint8_t* mainkey = sodium_malloc(klen);
     if (!mainkey)
         log_fatal("sodium_malloc() failed: %s", strerror(errno));
     // Do a trial read to determine if there's an existing autokey file which
@@ -287,7 +288,7 @@ static void autokey_setup(const char* mainkey_path)
     if (safe_read_key(mainkey, mainkey_path)) {
         log_info("Could not read autokey file %s, generating a new random one",
                  mainkey_path);
-        randombytes_buf(mainkey, crypto_kdf_blake2b_KEYBYTES);
+        randombytes_buf(mainkey, klen);
         safe_write_autokey(mainkey, mainkey_path);
     }
     sodium_free(mainkey);
