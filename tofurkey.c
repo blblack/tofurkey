@@ -86,9 +86,15 @@
 // clock_gettime(CLOCK_REALTIME) and also from our -T fake testing time. It's
 // important that it can't go negative, that the min is larger than MAX_IVAL
 // above, and that our time values (after adding an interval and fudge factor)
-// can't saturate an i64)
+// can't saturate an int64_t)
 #define MIN_REAL_TIME 1000000      // ~ Jan 12, 1970
 #define MAX_REAL_TIME 100000000000 // ~ Nov 16, 5138
+
+// These must hold for any future changes of the constants above, or else
+// logic/correctness needs fixing in the actual code.
+_Static_assert(MIN_IVAL >= 10);
+_Static_assert(DEF_IVAL >= MIN_IVAL);
+_Static_assert(MAX_IVAL >= DEF_IVAL);
 _Static_assert(MIN_REAL_TIME > MAX_IVAL);
 _Static_assert(MAX_REAL_TIME + MAX_IVAL + FUDGE_S < INT64_MAX);
 // Assert that time_t (type of .tv_sec) can hold the same positive range as
