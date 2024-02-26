@@ -473,22 +473,28 @@ static void parse_args(const int argc, char** argv, struct cfg* cfg_p)
     if (!cfg_p->interval)
         cfg_p->interval = DEF_IVAL;
 
-    if (arg_procfs)
-        cfg_p->procfs_path = strdup(arg_procfs);
-    else
-        cfg_p->procfs_path = strdup(def_procfs_path);
+    cfg_p->procfs_path = strdup(arg_procfs ? arg_procfs : def_procfs_path);
 
-    if (arg_mainkey) {
-        if (arg_autokey)
-            usage_err("Cannot set both -k and -a");
-        cfg_p->mainkey_path = strdup(arg_mainkey);
-    } else {
-        if (arg_autokey)
-            cfg_p->mainkey_path = strdup(arg_autokey);
-        else
-            cfg_p->mainkey_path = strdup(def_autokey_path);
+    if (arg_mainkey && arg_autokey)
+        usage_err("Cannot set both -k and -a");
+
+    const char* mainkey_path = NULL;
+    if (arg_mainkey)
+        mainkey_path = arg_mainkey;
+    else if (arg_autokey)
+        mainkey_path = arg_autokey;
+    else
+        mainkey_path = def_autokey_path;
+
+    const size_t mainkey_len = strlen(mainkey_path);
+    if (!mainkey_len)
+        usage_err("Key path arguments cannot be empty strings");
+    if (mainkey_path[mainkey_len - 1U] == '/')
+        usage_err("Key path arguments cannot have a trailing slash");
+
+    cfg_p->mainkey_path = strdup(mainkey_path);
+    if (!arg_mainkey)
         autokey_setup(cfg_p->mainkey_path);
-    }
 }
 
 F_NONNULL
