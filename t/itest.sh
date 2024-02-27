@@ -1,8 +1,16 @@
-#!/bin/sh
+#!/bin/bash
 
+# Support initial "-s" arg to run slow tests
+if [[ "${1}x" = "-sx" ]]; then
+    SLOW=1
+    shift
+else
+    SLOW=0
+fi
+
+# default to C binary in-tree, override via $1 for zig cases
 BIN=$1
-# default to C binary in-tree
-if [ "${BIN}x" = "x" ]; then
+if [[ "${BIN}x" = "x" ]]; then
     BIN=./tofurkey
 fi
 
@@ -13,7 +21,7 @@ AUTOKEY="${OUT}/autokey"
 KEY=t/test.key
 
 # Setup
-if [ ! -f "${BIN}" ] || [ ! -d t ]; then
+if [[ ! -f "${BIN}" ]] || [[ ! -d t ]]; then
     echo Run this from the repo root after building!
     exit 42
 fi
@@ -34,8 +42,9 @@ if ! grep -q 'procfs write: \[1000000] c998252e-8f89667d-31961e08-3897526b,1c9ca
 fi
 
 # Results checks on the fake procfs output
-PROCFS_CONTENTS=$(cat "${FAKE_PROCFS}")
-if [ "${PROCFS_CONTENTS}" != "c998252e-8f89667d-31961e08-3897526b,1c9ca1a5-9d295055-f8e3d4df-7107b577" ]; then
+IFS= read -r -d '' procfs_contents <"${FAKE_PROCFS}"
+
+if [[ "${procfs_contents}" != "c998252e-8f89667d-31961e08-3897526b,1c9ca1a5-9d295055-f8e3d4df-7107b577" ]]; then
     echo BASIC: Contents of fake procfs output are wrong!
     exit 42
 fi
@@ -53,8 +62,8 @@ if ! grep -q 'procfs write: \[1000000] c998252e-8f89667d-31961e08-3897526b,1c9ca
 fi
 
 # Results checks on the fake procfs output
-PROCFS_CONTENTS2=$(cat "${FAKE_PROCFS}")
-if [ "${PROCFS_CONTENTS2}" != "c998252e-8f89667d-31961e08-3897526b,1c9ca1a5-9d295055-f8e3d4df-7107b577" ]; then
+IFS= read -r -d '' procfs_contents2 <"${FAKE_PROCFS}"
+if [[ "${procfs_contents2}" != "c998252e-8f89667d-31961e08-3897526b,1c9ca1a5-9d295055-f8e3d4df-7107b577" ]]; then
     echo AUTOKEY-FIX: Contents of fake procfs output are wrong!
     exit 42
 fi
@@ -79,4 +88,26 @@ if ! cmp "${FAKE_PROCFS}" "${FAKE_PROCFS}.prev"; then
 fi
 
 echo Quick tests passed!
+if [[ ${SLOW} -eq 0 ]]; then exit 0; fi
+echo Running slow test, takes at least 23 seconds...
+
+${TEST_RUNNER} "${BIN}" -i 10 -k "${KEY}" -P "${FAKE_PROCFS}" -V >"${LOG}" 2>&1 &
+TOFURKEY_PID=$!
+
+sleep 23
+kill -TERM "${TOFURKEY_PID}"
+wait "${TOFURKEY_PID}"
+TOFURKEY_SIG=$(kill -l $?)
+if [[ "${TOFURKEY_SIG}"x = "TERMx" ]]; then
+    echo OK: Daemon exited via SIGTERM as expected!
+else
+    echo FAIL: Daemon did /not/ exit via SIGTERM as expected!
+    exit 42
+fi
+
+if ! t/output_checker.py "${KEY}" "${LOG}"; then
+    echo FAIL: Output checks failed!
+    exit 42
+fi
+echo Slow test passed!
 exit 0

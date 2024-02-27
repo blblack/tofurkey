@@ -56,16 +56,16 @@ pub fn build(b: *std.Build) void {
     const test_step = b.step("test", "Run unit tests");
     test_step.dependOn(&run_unit_tests.step);
 
-    // "zig build itest" -> Quick integration testing with t/quick.sh
+    // "zig build itest" -> Quick integration testing with t/itest.sh
     const itest_step = b.step("itest", "Run quick integration tests");
-    const itest_run_quick = b.addSystemCommand(&.{"t/quick.sh"});
+    const itest_run_quick = b.addSystemCommand(&.{"t/itest.sh"});
     itest_run_quick.addArtifactArg(exe);
     itest_step.dependOn(&itest_run_quick.step);
 
-    // "zig build itest-slow" -> Full integration testing with t/quick.sh + t/slow.sh
+    // "zig build itest-slow" -> Full integration testing with t/itest.sh -s
     const itest_step_slow = b.step("itest-slow", "Run full integration tests (slower)");
-    const itest_run_slow = b.addSystemCommand(&.{"t/slow.sh"});
+    const itest_run_slow = b.addSystemCommand(&.{"t/itest.sh"});
+    itest_run_slow.addArg("-s");
     itest_run_slow.addArtifactArg(exe);
     itest_step_slow.dependOn(&itest_run_slow.step);
-    itest_step_slow.dependOn(&itest_run_quick.step);
 }
