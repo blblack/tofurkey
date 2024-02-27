@@ -173,7 +173,7 @@ Currently, this builds correctly with both zig 0.11.0 and zig's current
     zig build itest
     # Run slow integration tests (same tests as C "make check SLOW_TESTS=1"):
     zig build itest-slow
-    # Build + install output in-tree (creates ./zig-out/bin/tofurkey):
+    # Install in-tree (installs binary and manpage into subpaths within ./zig-out/):
     zig build install
 
     # Notes:
