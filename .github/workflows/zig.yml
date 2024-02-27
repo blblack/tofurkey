@@ -1,0 +1,23 @@
+name: Zig CI
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build-test:
+    strategy:
+      fail-fast: false
+      matrix:
+        zig: [ 0.11.0, master ]
+    name: build and run tests with Zig ${{ matrix.zig }}
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - name: setup-zig
+      uses: korandoru/setup-zig@v1
+      with:
+        zig-version: ${{ matrix.zig }}
+    - run: zig build test itest-slow install
