@@ -2,6 +2,7 @@
 
 """This is a helper script for the tofurkey testsuite"""
 import re
+import sys
 import struct
 import pathlib
 import nacl.hashlib
@@ -48,12 +49,11 @@ def parse_key(key_ascii):
 
 def main():
     """
-    The values below could be parameterized, but for now they're just fixed to
-    match the slow test's own hardcoded values
+    Usage: output_checker.py test_key_file test_log_outfile
     """
     interval = 10
-    key_path = "t/test.key"
-    log_path = "t/testout/log"
+    key_path = sys.argv[1]
+    log_path = sys.argv[2]
     main_key = pathlib.Path(key_path).read_bytes()
     tfo_re = re.compile(
         r"procfs write: \[([0-9]+)\] "

@@ -1,20 +1,29 @@
 #!/bin/bash
 
-BIN=./tofurkey
+BIN=$1
+# default to C binary in-tree
+if [ "${BIN}x" = "x" ]; then
+    BIN=./tofurkey
+fi
+
+OUT=./t/testout_slow
+FAKE_PROCFS="${OUT}/fake_procfs"
+LOG="${OUT}/log"
+KEY=t/test.key
 
 # Setup
 if [[ ! -f "${BIN}" ]] || [[ ! -d t ]]; then
     echo Run this from the repo root after building!
     exit 42
 fi
-mkdir -p t/testout
-touch t/testout/fake_procfs
+mkdir -p "${OUT}"
+touch "${FAKE_PROCFS}"
 
 echo Running slow test, takes at least 23 seconds...
 
 # Execution
 : "${TEST_RUNNER:=}"
-${TEST_RUNNER} "${BIN}" -i 10 -k t/test.key -P t/testout/fake_procfs -V >t/testout/log 2>&1 &
+${TEST_RUNNER} "${BIN}" -i 10 -k "${KEY}" -P "${FAKE_PROCFS}" -V >"${LOG}" 2>&1 &
 TOFURKEY_PID=$!
 
 sleep 23
@@ -28,7 +37,7 @@ else
     exit 42
 fi
 
-if ! t/output_checker.py; then
+if ! t/output_checker.py "${KEY}" "${LOG}"; then
     echo FAIL: Output checks failed!
     exit 42
 fi
