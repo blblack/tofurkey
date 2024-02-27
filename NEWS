@@ -1,3 +1,16 @@
+1.2.0 - 2024-02-27
+    * TL;DR - No user-visible functional changes, but some log outputs
+      changed and a ton of internal refactoring/cleanup happened
+    * CLI Usage output reformatted
+    * Several error messages improved
+    * Log outputs to stderr are all prefixed by one of the strings: "info:",
+      "error:", or "FATAL:"
+    * More constraints checking at compile time
+    * More error checking for unlikely failure modes and silly inputs
+    * Lots of other misc internal refactoring/improvements
+    * An EXPERIMENTAL port to Zig was added alongside the normal C version
+      here in the same source tree.  See bottom of README.md for details.
+
 1.1.0 - 2024-02-13
     * libev dependency removed.  The timing loop is now done manually, and
       just as correctly AFAIK, via clock_gettime() and clock_nanosleep().

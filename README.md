@@ -38,27 +38,27 @@ it with fatal signals such as SIGTERM.
 
 ## Usage
 
-    tofurkey [-vno] [-i seconds] [-a /run/tofurkey.autokey] [-k /path/to/main/secret]
-    -k -- Path to long-term main secret file generated and distributed to a
-          cluster by the administrator. This file must exist and have at least
-          32 bytes of secret high-entropy binary data, and will be re-read
-          every time TFO keys are generated. Mutually exclusive with -a. If
-          this option is not provided, then the -a autokey mode is the default.
-    -a -- Custom pathname to persist an auto-generated key, defaults to
-          '/run/tofurkey.autokey'. This file will be created if it's missing
-          and persisted across runs, but perhaps not across reboots at the
-          default path, and obviously affords no possibility of distributed
-          sync across a cluster. Mutually exclusive with -k.
-    -i -- Interval seconds for key rotation, default is 86400, allowed range
-          is 10 - 604800, must be even. Daemon wakes up to rotate keys at every
-          half-interval of unix time to manage validity overlaps. Intervals
-          *must* match across a cluster to get the same keys!
-    -v -- Verbose output to stderr
-    -n -- Dry-run mode - Data is not actually written to procfs, but everything
-          else still happens
-    -o -- One-shot mode - it will calculate the current keys and set them once
-          and then exit. Normal mode is to remain running and rotate keys on
-          timer intervals forever.
+    Usage: tofurkey [-vno] [-i seconds] [-a /run/tofurkey.autokey] [-k /path/to/main/secret]
+      -k Path to long-term main secret file generated and distributed to a
+         cluster by the administrator. This file must exist and have at least
+         32 bytes of secret high-entropy binary data, and will be re-read every
+         time TFO keys are generated. Mutually exclusive with -a. If this option
+         is not provided, then the -a autokey mode is the default.
+      -a Custom pathname to persist an auto-generated key, defaults to
+         '/run/tofurkey.autokey'. This file will be created if it's missing
+         and persisted across runs, but perhaps not across reboots at the
+         default path, and obviously affords no possibility of distributed
+         sync across a cluster. Mutually exclusive with -k.
+      -i Interval seconds for key rotation, default is 86400, allowed range
+         is 10 - 604800, must be even. Daemon wakes up to rotate keys at
+         every half-interval of unix time to manage validity overlaps.
+         Intervals *must* match across a cluster to get the same keys!
+      -v Verbose output to stderr
+      -n Dry-run mode - Data is not actually written to procfs, but everything
+         else still happens
+      -o One-shot mode - it will calculate the current keys and set them once
+         and then exit. Normal mode is to remain running and rotate keys on
+         timer intervals forever.
 
 ## Generating and managing the main key
 
@@ -144,3 +144,63 @@ Run slower tests with `make check SLOW_TESTS=1` (requires python3, and the "nacl
 Run code quality checks with: `make qa` -- Note this requires several more tools (valgrind, cppcheck, clang analyzer, astyle) and may only work with the local versions of these that I happen to use!  It's mostly for use during my development.
 
 There's also a trivial example systemd unit file in the source tree as `tofurkey.service`
+
+## Experimental Zig Port!
+
+This repo now also contains an experimental port of tofurkey's C code to
+zig. I made this port mostly as a learning exercise.  I won't promise
+anything about the quality of the ported code, as I'm still learning the
+language and the language itself is not yet stable. Consider it
+EXPERIMENTAL!
+
+This port aims to mirror the C code as closely as it reasonably can,
+making comparison of the two languages easy, while still taking
+advantage of Zig stuff everywhere it can.  It generally has the same
+core function names, same approximate file layout, mostly the same
+commentary and log outputs, etc.  I plan to keep this port in sync with
+changes to the C source as I go.  As with the C code, it requires
+libsodium (and headers).
+
+Currently, this builds correctly with both zig 0.11.0 and zig's current
+(as of this writing) master branch (0.12.0-dev), by the magic of
+@hasDecl and @typeInfo.
+
+### Building/testing/installing the experimental zig port
+
+    # Run unit tests (Zig-only):
+    zig build test
+    # Run quick integration tests (same tests as C "make check"):
+    zig build itest
+    # Run slow integration tests (same tests as C "make check SLOW_TESTS=1"):
+    zig build itest-slow
+    # Install in-tree (installs binary and manpage into subpaths within ./zig-out/):
+    zig build install
+
+    # Notes:
+    #  * All "zig build" commands can take optional arguments:
+    #        -Doptimize={Debug|ReleaseSafe|ReleaseSmall|ReleaseFast}
+    #        -Drundir=/run
+    #  * For install step (the default), default installation prefix is
+    #    ./zig-out, but you can override with e.g.:
+    #        --prefix /usr
+    #  * You can do more than one build command in one invocation
+    #  * Results (executables, test results, etc) are cached locally and
+    #    re-used by future invocations, assuming same -D args.
+    #  * If you don't see an error message, assume it did the things
+    #    successfully (zig tends to only generate output by default if
+    #    something fails)
+    #  * You can add flags "--summary all" and/or "--verbose" to see
+    #    more of what's happening, including those silent successes
+    #    and/or re-use of cached results.
+
+    # All-in-one: ReleaseSafe build mode, run unit tests, run quick
+    #             integration tests, and install to ./zig-out :
+    zig build test itest install -Doptimize=ReleaseSafe
+
+    # Do the final install to system dirs (reuses cached compile from above):
+    sudo zig build install -Doptimize=ReleaseSafe --prefix /usr
+
+### Known eventual TODOs for the Zig port:
+
+* clock\_nanosleep() - I made a wrapper that's tailored to our use, but should build a generic real implementation to upstream to std.posix. It clearly belongs, it's just missing there currently.
+* getopt() - I made a zig-style iterator interface to wrap libc for now, but really the whole getopt logic should just be implemented in native zig with a goal of upstreaming to std somewhere (not because getopt is all that awesome, more because it would ease adoption/ports for others with getopt()-based CLI parsing in old C projects).

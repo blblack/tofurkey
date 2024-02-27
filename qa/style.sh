@@ -5,4 +5,4 @@ if [ ! -d t ] || [ ! -d qa ]; then
 fi
 set -e
 set -x
-astyle -q -n --options=.astylerc ./*.c
+astyle -q -n --options=.astylerc src/*.c

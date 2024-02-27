@@ -15,15 +15,14 @@ LDLIBS ?= -lsodium
 all: tofurkey
 rundir.inc: Makefile
 	echo "// Dynamically created by make\n#define RUNDIR \"$(rundir)\"" >$@
-tofurkey: tofurkey.c rundir.inc Makefile
-	$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) $(filter %.c,$^) $(LDLIBS) -o $@
+tofurkey: src/tofurkey.c rundir.inc Makefile
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) -I. $(filter %.c,$^) $(LDLIBS) -o $@
 clean:
 	$(RM) rundir.inc
 	$(RM) tofurkey
 distclean: clean
 check: tofurkey
-	@t/quick.sh
-	@if [ "$(SLOW_TESTS)"x != x ]; then t/slow.sh; fi
+	@if [ "$(SLOW_TESTS)"x != x ]; then t/itest.sh -s; else t/itest.sh; fi
 test: check
 qa: tofurkey check
 	@echo "===== Enforcing style (may alter source!) ... ====="
