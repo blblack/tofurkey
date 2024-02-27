@@ -1,0 +1,42 @@
+name: C and Zig CI
+env:
+  SLOW_TESTS: 1
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  c-make-check:
+    name: make check with C
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - name: install-cached-deps
+      uses: awalsh128/cache-apt-pkgs-action@latest
+      with:
+        packages: libsodium-dev python3-nacl
+        version: 1.2
+    - name: make check
+      run: make check
+  zig-build-test:
+    strategy:
+      fail-fast: false
+      matrix:
+        zig: [ 0.11.0, master ]
+    name: build and run tests with Zig ${{ matrix.zig }}
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - name: install-cached-deps
+      uses: awalsh128/cache-apt-pkgs-action@latest
+      with:
+        packages: libsodium-dev python3-nacl
+        version: 1.2
+    - name: setup-zig
+      uses: korandoru/setup-zig@v1
+      with:
+        zig-version: ${{ matrix.zig }}
+    - run: zig build test itest-slow install
