@@ -26,7 +26,8 @@ jobs:
       fail-fast: false
       matrix:
         zig: [ 0.11.0, master ]
-    name: build and run tests with Zig ${{ matrix.zig }}
+        opt: [ Debug, ReleaseFast ]
+    name: build and run tests with Zig ${{ matrix.zig }} ${{ matrix.opt }}
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
@@ -39,4 +40,5 @@ jobs:
       uses: korandoru/setup-zig@v1
       with:
         zig-version: ${{ matrix.zig }}
-    - run: zig build test itest-slow install
+    - run: zig version
+    - run: zig build test itest-slow install -Doptimize=${{ matrix.opt }} --summary all --verbose
