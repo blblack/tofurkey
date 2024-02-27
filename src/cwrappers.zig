@@ -7,7 +7,6 @@
 
 const std = @import("std");
 const assert = std.debug.assert;
-const log = std.log;
 // Handle 0.11.0->0.12-dev switch from "os" to "posix"
 const posix = if (@hasDecl(std, "posix")) std.posix else std.os;
 const c = @cImport({
