@@ -1,3 +1,9 @@
+tofurkey (1.2.0) experimental; urgency=low
+
+  * Update upstream to 1.2.0
+
+ -- Brandon L Black <blblack@gmail.com>  Tue, 27 Feb 2024 12:44:34 -0600
+
 tofurkey (1.1.0) experimental; urgency=low
 
   * Update upstream to 1.1.0
