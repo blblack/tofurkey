@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: 0BSD
+// SPDX-FileCopyrightText: 2024 Brandon L Black <blblack@gmail.com>
+
 const std = @import("std");
 pub fn build(b: *std.Build) void {
     // Standard options

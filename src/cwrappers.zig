@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: 0BSD
+// SPDX-FileCopyrightText: 2024 Brandon L Black <blblack@gmail.com>
+
 // This file encapsulates all our direct uses of libc and libsodium into more
 // zig-like interfaces for the main code. In theory, at least the libc parts
 // could be obviated by improvements to the Zig Standard Library.
