@@ -1,18 +1,15 @@
 // SPDX-License-Identifier: 0BSD
 // SPDX-FileCopyrightText: 2024 Brandon L Black <blblack@gmail.com>
 
-// This file encapsulates all our direct uses of libc and libsodium into more
-// zig-like interfaces for the main code. In theory, at least the libc parts
-// could be obviated by improvements to the Zig Standard Library.
+// This file encapsulates all our direct uses of libc and libsodium into
+// more zig-like interfaces for the main code.
 
 const std = @import("std");
 const assert = std.debug.assert;
 // Handle 0.11.0->0.12-dev switch from "os" to "posix"
 const posix = if (@hasDecl(std, "posix")) std.posix else std.os;
 const c = @cImport({
-    @cDefine("_GNU_SOURCE", {});
     @cInclude("time.h"); // clock_nanosleep()
-    @cInclude("unistd.h"); // getopt()
     @cInclude("sodium.h"); // libsodium
 });
 
@@ -39,46 +36,6 @@ test "clock_nanosleep sanity" {
         return error.TimeRange;
     try clock_nanosleep_real_abs(@intCast(ts.tv_sec), 0);
 }
-
-pub const GetOptIterator = struct {
-    c_argc: c_int,
-    c_argv: [*c]const [*c]u8,
-    c_optstr: [*:0]const u8,
-
-    pub fn init(argv: [][*:0]const u8, optstr: [:0]const u8) !GetOptIterator {
-        if (argv.len > std.math.maxInt(c_int))
-            return error.TooManyCLIArguments;
-        return .{
-            .c_argc = @intCast(argv.len),
-            .c_argv = @ptrCast(argv),
-            .c_optstr = optstr,
-        };
-    }
-
-    pub fn next(self: GetOptIterator) ?u8 {
-        const opt = c.getopt(self.c_argc, self.c_argv, self.c_optstr);
-        if (opt < 0)
-            return null;
-        return @truncate(@as(c_uint, @bitCast(opt)));
-    }
-
-    pub fn optarg(self: GetOptIterator) ?[*:0]const u8 {
-        _ = self;
-        return c.optarg;
-    }
-
-    pub fn optind(self: GetOptIterator) usize {
-        _ = self;
-        if (c.optind < 1) // JIC
-            return 1;
-        return @intCast(c.optind);
-    }
-
-    pub fn optopt(self: GetOptIterator) u8 {
-        _ = self;
-        return @bitCast(@as(i8, @truncate(c.optopt)));
-    }
-};
 
 //-----------------
 // libsodium stuff

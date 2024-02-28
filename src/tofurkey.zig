@@ -9,6 +9,7 @@ const posix = if (@hasDecl(std, "posix")) std.posix else std.os;
 const log = std.log;
 const assert = std.debug.assert;
 const Allocator = std.mem.Allocator;
+const getopt = @import("getopt.zig"); // Our POSIXy getopt() native impl
 const cw = @import("cwrappers.zig"); // This wraps our C stuff (libc, libsodium)
 
 // This whole project, by its functional nature, only works on Linux
@@ -348,16 +349,16 @@ const cfg_s = struct {
         var arg_autokey: ?[*:0]const u8 = null;
         var arg_mainkey: ?[*:0]const u8 = null;
         var arg_procfs: ?[*:0]const u8 = null;
-        const goi = try cw.GetOptIterator.init(posix.argv, ":k:i:P:T:a:vVno");
+        var goi = getopt.getopt(posix.argv, ":k:i:P:T:a:vVno");
         while (goi.next()) |optchar| {
             switch (optchar) {
                 'v' => self.verbose = true,
                 'n' => self.dry_run = true,
                 'o' => self.one_shot = true,
-                'k' => arg_mainkey = goi.optarg().?,
-                'a' => arg_autokey = goi.optarg().?,
+                'k' => arg_mainkey = goi.getOptArg().?,
+                'a' => arg_autokey = goi.getOptArg().?,
                 'i' => {
-                    const arg = goi.optarg().?;
+                    const arg = goi.getOptArg().?;
                     const i = std.fmt.parseInt(u64, std.mem.span(arg), 10) catch {
                         _usage("Cannot parse '{s}' as u64", .{arg});
                     };
@@ -366,13 +367,13 @@ const cfg_s = struct {
                     self.interval = i;
                 },
                 // These three are just for testsuite/debugging:
-                'P' => arg_procfs = goi.optarg().?,
+                'P' => arg_procfs = goi.getOptArg().?,
                 'V' => {
                     self.verbose = true;
                     self.verbose_leaky = true;
                 },
                 'T' => {
-                    const arg = goi.optarg().?;
+                    const arg = goi.getOptArg().?;
                     const t = std.fmt.parseInt(u64, std.mem.span(arg), 10) catch {
                         _usage("Cannot parse '{s}' as u64", .{arg});
                     };
@@ -382,13 +383,13 @@ const cfg_s = struct {
                     self.one_shot = true;
                 },
                 // Error cases
-                '?' => _usage("Invalid Option '-{c}'", .{goi.optopt()}),
-                ':' => _usage("Missing argument for '-{c}'", .{goi.optopt()}),
-                else => _usage("Unknown error processing CLI options", .{}),
+                '?' => _usage("Invalid Option '-{c}'", .{goi.getOptOpt()}),
+                ':' => _usage("Missing argument for '-{c}'", .{goi.getOptOpt()}),
+                else => unreachable,
             }
         }
 
-        if (goi.optind() != posix.argv.len)
+        if (goi.getOptInd() != posix.argv.len)
             _usage("Excess unknown CLI arguments after options", .{});
 
         // Handle path string defaulting and autokey logic, etc
@@ -512,4 +513,10 @@ pub fn main() !void {
         try cw.clock_nanosleep_real_abs(next_wake_fudged, FUDGE_NS);
         next_wake = try set_keys(cfg, sec_alloc, try realtime_u64());
     }
+}
+
+test {
+    // Make sure we run unit tests in our other local import files
+    std.testing.refAllDecls(getopt);
+    std.testing.refAllDecls(cw);
 }

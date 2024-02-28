@@ -203,4 +203,3 @@ Currently, this builds correctly with both zig 0.11.0 and zig's current
 ### Known eventual TODOs for the Zig port:
 
 * clock\_nanosleep() - I made a wrapper that's tailored to our use, but should build a generic real implementation to upstream to std.posix. It clearly belongs, it's just missing there currently.
-* getopt() - I made a zig-style iterator interface to wrap libc for now, but really the whole getopt logic should just be implemented in native zig with a goal of upstreaming to std somewhere (not because getopt is all that awesome, more because it would ease adoption/ports for others with getopt()-based CLI parsing in old C projects).
