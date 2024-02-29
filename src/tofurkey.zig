@@ -95,10 +95,14 @@ const kdf_ctx = [8]u8{ 't', 'o', 'f', 'u', 'r', 'k', 'e', 'y' };
 
 // Helpers to block/restore signals around sensitive code paths
 fn block_all_signals() posix.sigset_t {
+    // linux filled_sigset definition copied out of master std/os/linux.zig, so
+    // we can use it on 0.11.0, can remove later.
+    const sigset_len = @typeInfo(posix.sigset_t).Array.len;
+    const usize_bits = @typeInfo(usize).Int.bits;
+    const filled_sigset = [_]u32{(1 << (31 & (usize_bits - 1))) - 1} ++ [_]u32{0} ** (sigset_len - 1);
+
     var sigmask_prev: posix.sigset_t = undefined;
-    var sigmask_all: posix.sigset_t = undefined;
-    std.c.sigfillset(&sigmask_all);
-    posix.sigprocmask(posix.SIG.SETMASK, &sigmask_all, &sigmask_prev);
+    posix.sigprocmask(posix.SIG.SETMASK, &filled_sigset, &sigmask_prev);
     return sigmask_prev;
 }
 
@@ -493,8 +497,9 @@ pub fn main() !void {
     const rlzero = posix.rlimit{ .cur = 0, .max = 0 };
     try posix.setrlimit(.CORE, rlzero);
 
-    // plain C alloc for config/path/etc
-    const alloc = std.heap.c_allocator;
+    // plain GPA for config/path/etc
+    var general_purpose_allocator = std.heap.GeneralPurposeAllocator(.{}){};
+    const alloc = general_purpose_allocator.allocator();
 
     const cfg: *const cfg_s = try cfg_s.init(alloc);
     defer cfg.deinit(alloc);

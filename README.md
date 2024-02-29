@@ -158,7 +158,8 @@ making comparison of the two languages easy, while still taking
 advantage of Zig stuff everywhere it can.  It generally has the same
 core function names, same approximate file layout, mostly the same
 commentary and log outputs, etc.  I plan to keep this port in sync with
-changes to the C source as I go.
+changes to the C source as I go. Implementation is pure Zig using only
+the Zig Standard Library (no libc, no libsodium).
 
 Currently, this builds correctly with both zig 0.11.0 and zig's current
 (as of this writing) master branch (0.12.0-dev), by the magic of
