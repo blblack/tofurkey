@@ -31,9 +31,8 @@ pub fn build(b: *std.Build) void {
         exe.root_module.addOptions("config", options); // master 0.12.0-dev
     }
 
-    // Link libsodium and libc for the executable
-    exe.linkSystemLibrary("sodium");
-    exe.linkLibC();
+    // Link libc for the executable
+    exe.linkLibC()
 
     // Declare the built executable as installable and put it in an overrideable sbindir
     const sbindir = b.option([]const u8, "sbindir", "Prefix-relative subpath for sbin dir, default 'sbin'") orelse "sbin";
@@ -53,8 +52,7 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
     });
-    unit_exe.linkSystemLibrary("sodium");
-    unit_exe.linkLibC();
+    unit_exe.linkLibC()
     const run_unit_tests = b.addRunArtifact(unit_exe);
     const test_step = b.step("test", "Run unit tests");
     test_step.dependOn(&run_unit_tests.step);
