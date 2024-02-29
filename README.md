@@ -199,7 +199,3 @@ Currently, this builds correctly with both zig 0.11.0 and zig's current
 
     # Do the final install to system dirs (reuses cached compile from above):
     sudo zig build install -Doptimize=ReleaseSafe --prefix /usr
-
-### Known eventual TODOs for the Zig port:
-
-* clock\_nanosleep() - I made a wrapper that's tailored to our use, but should build a generic real implementation to upstream to std.posix. It clearly belongs, it's just missing there currently.

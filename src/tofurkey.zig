@@ -78,7 +78,9 @@ comptime {
     assert(MAX_IVAL >= DEF_IVAL);
     assert(MIN_REAL_TIME > MAX_IVAL);
     assert(MAX_REAL_TIME + MAX_IVAL + FUDGE_S < std.math.maxInt(i64));
-    // time_t vs i64 is checked in cwrappers.zig
+    // Assert that time_t (timespec.tv_sec) can hold the same positive range as
+    // i64. This code is intentionally not compatible with 32-bit time_t!
+    assert(std.math.maxInt(posix.time_t) >= std.math.maxInt(i64));
 }
 
 // Default pathnames:
@@ -503,10 +505,10 @@ pub fn main() !void {
     if (cfg.verbose)
         log.info("Will set keys at each half-interval, when unix_time % {d} ~= 2", .{cfg.interval / 2});
     while (true) {
-        const next_wake_fudged = next_wake + FUDGE_S;
+        const next_fudged = next_wake + FUDGE_S;
         if (cfg.verbose)
-            log.info("Sleeping until next half-interval wakeup at {d}", .{next_wake_fudged});
-        try cw.clock_nanosleep_real_abs(next_wake_fudged, FUDGE_NS);
+            log.info("Sleeping until next half-interval wakeup at {d}", .{next_fudged});
+        try lsys.clock_nanosleep(posix.CLOCK.REALTIME, lsys.TIMER.ABSTIME, next_fudged, FUDGE_NS);
         next_wake = try set_keys(cfg, try realtime_u64());
     }
 }
