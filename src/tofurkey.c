@@ -23,6 +23,8 @@
 #include <sys/stat.h>
 #include <sys/socket.h>
 #include <sys/un.h>
+#include <sys/mman.h>
+#include <sys/resource.h>
 #include <unistd.h>
 #include <stdlib.h>
 #include <signal.h>
@@ -579,6 +581,13 @@ static uint64_t set_keys(const struct cfg* cfg_p, const uint64_t now)
 
 int main(int argc, char* argv[])
 {
+    if (!geteuid())
+        if (mlockall(MCL_CURRENT | MCL_FUTURE | MCL_ONFAULT))
+            log_fatal("mlockall(MCL_CURRENT | MCL_FUTURE | MCL_ONFAULT) failed: %s", strerror(errno));
+    const struct rlimit rlzero = { 0 };
+    if (setrlimit(RLIMIT_CORE, &rlzero))
+        log_fatal("setrlimit(RLIMIT_CORE, { 0, 0 }) failed: %s", strerror(errno));
+
     if (sodium_init() < 0)
         log_fatal("Could not initialize libsodium!");
 

@@ -6,10 +6,12 @@ const builtin = @import("builtin");
 const config = @import("config");
 // Handle 0.11.0->0.12-dev switch from "os" to "posix"
 const posix = if (@hasDecl(std, "posix")) std.posix else std.os;
+const os = std.os;
 const log = std.log;
 const assert = std.debug.assert;
 const Allocator = std.mem.Allocator;
 const getopt = @import("getopt.zig"); // Our POSIXy getopt() native impl
+const lsys = @import("lsys.zig"); // non-libc Linux syscall stuff
 const cw = @import("cwrappers.zig"); // This wraps our C stuff (libc, libsodium)
 
 // This whole project, by its functional nature, only works on Linux
@@ -479,6 +481,10 @@ fn set_keys(cfg: *const cfg_s, sec_alloc: Allocator, now: u64) !u64 {
 }
 
 pub fn main() !void {
+    if (os.linux.geteuid() == 0)
+        try lsys.mlockall(lsys.MCL.CURRENT | lsys.MCL.FUTURE | lsys.MCL.ONFAULT);
+    const rlzero = posix.rlimit{ .cur = 0, .max = 0 };
+    try posix.setrlimit(.CORE, rlzero);
     try cw.sodium_init();
 
     // plain C alloc for config/path/etc
@@ -518,5 +524,6 @@ pub fn main() !void {
 test {
     // Make sure we run unit tests in our other local import files
     std.testing.refAllDecls(getopt);
+    std.testing.refAllDecls(lsys);
     std.testing.refAllDecls(cw);
 }
