@@ -81,33 +81,3 @@ test "blake2b KDF alg check" {
     };
     try std.testing.expectEqualSlices(u8, &expect_out, &outbuf);
 }
-
-// A zig allocator wrapping simple use of sodium_malloc/free
-pub fn SodiumAllocator() type {
-    return struct {
-        pub fn allocator(self: *@This()) std.mem.Allocator {
-            return .{
-                .ptr = self,
-                .vtable = &.{
-                    .alloc = sodium_alloc,
-                    .resize = std.mem.Allocator.noResize,
-                    .free = sodium_free,
-                },
-            };
-        }
-
-        fn sodium_alloc(ctx: *anyopaque, len: usize, log2_ptr_align: u8, ret_addr: usize) ?[*]u8 {
-            _ = ctx;
-            _ = log2_ptr_align;
-            _ = ret_addr;
-            return @as(?[*]u8, @ptrCast(c.sodium_malloc(len)));
-        }
-
-        fn sodium_free(ctx: *anyopaque, old_mem: []u8, log2_old_align_u8: u8, ret_addr: usize) void {
-            _ = ctx;
-            _ = log2_old_align_u8;
-            _ = ret_addr;
-            c.sodium_free(@as(*anyopaque, @ptrCast(old_mem)));
-        }
-    };
-}

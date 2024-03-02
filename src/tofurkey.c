@@ -274,20 +274,19 @@ static void autokey_setup(const char* mainkey_path)
     sigset_t saved_sigs;
     block_all_signals(&saved_sigs);
 
-    // Allocate temporary main key storage
-    const size_t klen = crypto_kdf_blake2b_KEYBYTES;
-    uint8_t* mainkey = sodium_malloc(klen);
-    if (!mainkey)
-        log_fatal("sodium_malloc() failed: %s", strerror(errno));
+    // Temporary main key storage
+    uint8_t mainkey[crypto_kdf_blake2b_KEYBYTES];
+
     // Do a trial read to determine if there's an existing autokey file which
     // is usable. If it's not usable, invent a random key and persist it.
     if (safe_read_key(mainkey, mainkey_path)) {
+        sodium_memzero(&mainkey, sizeof(mainkey));
         log_info("Could not read autokey file %s, generating a new random one",
                  mainkey_path);
-        randombytes_buf(mainkey, klen);
+        randombytes_buf(&mainkey, sizeof(mainkey));
         safe_write_autokey(mainkey, mainkey_path);
     }
-    sodium_free(mainkey);
+    sodium_memzero(&mainkey, sizeof(mainkey));
     restore_signals(&saved_sigs);
 }
 
@@ -522,46 +521,43 @@ static void set_keys_secure(const struct cfg* cfg_p, const uint64_t now,
     sigset_t saved_sigs;
     block_all_signals(&saved_sigs);
 
-    // Allocate secure storage for all key materials
-    struct keys {
-        uint8_t main[crypto_kdf_blake2b_KEYBYTES];
-        uint8_t primary[TFO_KEY_LEN];
-        uint8_t backup[TFO_KEY_LEN];
-        char ascii[TFO_ASCII_ALLOC];
-    };
-    struct keys* k = sodium_malloc(sizeof(*k));
-    if (!k)
-        log_fatal("sodium_malloc() failed: %s", strerror(errno));
+    uint8_t key_main[crypto_kdf_blake2b_KEYBYTES];
+    uint8_t key_primary[TFO_KEY_LEN];
+    uint8_t key_backup[TFO_KEY_LEN];
+    char key_ascii[TFO_ASCII_ALLOC];
 
     // Now read in the long-term main key file and generate our pair of ephemeral keys:
-    if (safe_read_key(k->main, cfg_p->mainkey_path))
+    if (safe_read_key(key_main, cfg_p->mainkey_path)) {
+        sodium_memzero(&key_main, sizeof(key_main));
         log_fatal("Could not read key file %s", cfg_p->mainkey_path);
+    }
 
     // generate the pair of timed keys to set
-    if (crypto_kdf_blake2b_derive_from_key(k->primary, sizeof(k->primary),
-                                           ctr_primary, kdf_ctx, k->main)) {
-        sodium_memzero(k, sizeof(*k));
+    if (crypto_kdf_blake2b_derive_from_key(key_primary, sizeof(key_primary),
+                                           ctr_primary, kdf_ctx, key_main)) {
+        sodium_memzero(&key_main, sizeof(key_main));
+        sodium_memzero(&key_primary, sizeof(key_primary));
         log_fatal("b2b_derive_from_key failed");
     }
-    if (crypto_kdf_blake2b_derive_from_key(k->backup, sizeof(k->primary),
-                                           ctr_backup, kdf_ctx, k->main)) {
-        sodium_memzero(k, sizeof(*k));
+    if (crypto_kdf_blake2b_derive_from_key(key_backup, sizeof(key_primary),
+                                           ctr_backup, kdf_ctx, key_main)) {
+        sodium_memzero(&key_main, sizeof(key_main));
+        sodium_memzero(&key_backup, sizeof(key_backup));
         log_fatal("b2b_derive_from_key failed");
     }
-    sodium_memzero(k->main, sizeof(k->main));
+    sodium_memzero(&key_main, sizeof(key_main));
 
     // convert the pair to the procfs ASCII format
-    convert_keys_ascii(k->ascii, k->primary, k->backup);
-    sodium_memzero(k->primary, sizeof(k->primary));
-    sodium_memzero(k->backup, sizeof(k->backup));
+    convert_keys_ascii(key_ascii, key_primary, key_backup);
+    sodium_memzero(&key_primary, sizeof(key_primary));
+    sodium_memzero(&key_backup, sizeof(key_backup));
 
     if (cfg_p->verbose_leaky)
         log_verbose("Generated ASCII TFO keys for procfs write: "
-                    "[%" PRIu64 "] %s", now, k->ascii);
+                    "[%" PRIu64 "] %s", now, key_ascii);
     if (!cfg_p->dry_run)
-        safe_write_procfs(k->ascii, cfg_p->procfs_path);
-    sodium_memzero(k->ascii, sizeof(k->ascii)); // redundant, for clarity/consistency
-    sodium_free(k);
+        safe_write_procfs(key_ascii, cfg_p->procfs_path);
+    sodium_memzero(&key_ascii, sizeof(key_ascii)); // redundant, for clarity/consistency
     restore_signals(&saved_sigs);
 }
 
