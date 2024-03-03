@@ -84,7 +84,7 @@ pub const GetOptIterator = struct {
     _optopt: u8 = '?',
 
     // This pattern for robust stderr output copied from std.log.defaultLog():
-    fn _errprint(comptime format: []const u8, args: anytype) void {
+    fn _perr(comptime format: []const u8, args: anytype) void {
         const stderr = std.io.getStdErr().writer();
         var bw = std.io.bufferedWriter(stderr);
         const writer = bw.writer();
@@ -159,7 +159,7 @@ pub const GetOptIterator = struct {
         // an error:
         if (maybe_optstr_idx == null or flag == ':') {
             if (do_stderr)
-                _errprint("{s}: invalid option -- '{c}'", .{ self._argv[0], flag });
+                _perr("{s}: invalid option -- '{c}'", .{ self._argv[0], flag });
             self._optopt = flag;
             // We still maintain proper state, primarily to avoid an infinite
             // while() loop if the caller doesn't terminate the loop on '?',
@@ -200,7 +200,7 @@ pub const GetOptIterator = struct {
             } else {
                 // No further argv elem to use as optarg:
                 if (do_stderr)
-                    _errprint("{s}: option requires an argument -- '{c}'", .{ self._argv[0], flag });
+                    _perr("{s}: option requires an argument -- '{c}'", .{ self._argv[0], flag });
                 self._optopt = flag;
                 flag = if (self._colon_mode) ':' else '?';
             }
@@ -301,7 +301,11 @@ test getopt {
 }
 
 test "getopt - exercise interfaces + code paths" {
-    const myargv = [_][*:0]const u8{ "myprogram", "-vxasdf", "-i1234", "-A", "-vn", "-s", "foo", "-v", "-", "extra2" };
+    const myargv = [_][*:0]const u8{
+        "myprogram", "-vxasdf", "-i1234", "-A",
+        "-vn",       "-s",      "foo",    "-v",
+        "-",         "extra2",
+    };
     var vcount: usize = 0;
     var ncount: usize = 0;
     var goi = getopt(&myargv, "vni:x:s:");
