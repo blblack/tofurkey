@@ -355,7 +355,7 @@ const cfg_s = struct {
             \\     and then exit. Normal mode is to remain running and rotate keys on
             \\     timer intervals forever.
             \\
-            \\This is tofurkey v1.2.0 (EXPERIMENTAL Zig variant)
+            \\This is tofurkey v1.3.0 (EXPERIMENTAL Zig variant)
             \\tofurkey is a tool for distributed sync of Linux TCP Fastopen key rotations
             \\More info is available at https://github.com/blblack/tofurkey
             \\
