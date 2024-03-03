@@ -7,16 +7,24 @@
 // minimal and/or specific to this project and/or not generic enough (yet).
 
 const std = @import("std");
+const builtin = @import("builtin");
 // Handle 0.11.0->0.12-dev switch from "os" to "posix"
 const posix = if (@hasDecl(std, "posix")) std.posix else std.os;
 
 // -------------------
-// These bits would go in lib/std/os/linux.zig (without the hacky lsys_ prefix):
+// These bits would go in lib/std/os/linux.zig (without the _ prefix on the call):
 // -------------------
 
-// These constants vary by hardware, but the values here seems to be correct
-// for all except sparc, ppc, and alpha.  Good enough for me, for now.
-pub const MCL = struct {
+const native_arch = builtin.cpu.arch;
+const is_ppc = native_arch.isPPC();
+const is_ppc64 = native_arch.isPPC64();
+const is_sparc = native_arch.isSPARC();
+
+pub const MCL = if (is_ppc or is_ppc64 or is_sparc) struct {
+    pub const CURRENT = 0x2000;
+    pub const FUTURE = 0x4000;
+    pub const ONFAULT = 0x8000;
+} else struct {
     pub const CURRENT = 0x01;
     pub const FUTURE = 0x02;
     pub const ONFAULT = 0x04;
