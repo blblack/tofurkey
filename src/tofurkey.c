@@ -542,6 +542,7 @@ static void set_keys_secure(const struct cfg* cfg_p, const uint64_t now,
     if (crypto_kdf_blake2b_derive_from_key(key_backup, sizeof(key_primary),
                                            ctr_backup, kdf_ctx, key_main)) {
         sodium_memzero(&key_main, sizeof(key_main));
+        sodium_memzero(&key_primary, sizeof(key_primary));
         sodium_memzero(&key_backup, sizeof(key_backup));
         log_fatal("b2b_derive_from_key failed");
     }
@@ -557,7 +558,7 @@ static void set_keys_secure(const struct cfg* cfg_p, const uint64_t now,
                     "[%" PRIu64 "] %s", now, key_ascii);
     if (!cfg_p->dry_run)
         safe_write_procfs(key_ascii, cfg_p->procfs_path);
-    sodium_memzero(&key_ascii, sizeof(key_ascii)); // redundant, for clarity/consistency
+    sodium_memzero(&key_ascii, sizeof(key_ascii));
     restore_signals(&saved_sigs);
 }
 
