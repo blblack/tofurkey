@@ -36,7 +36,7 @@ else
     };
 
 // 0.11.0 vs 0.12-dev difference in open flags (u32 vs struct)
-const old_open_flags: bool = @typeInfo(@TypeOf(posix.open)).Fn.params[2].type.? == u32;
+const old_open_flags: bool = @typeInfo(@TypeOf(posix.open)).Fn.params[1].type.? == u32;
 
 // Constants for blake2b_kdf
 const KDF_KEYBYTES = 32;
@@ -355,7 +355,7 @@ const cfg_s = struct {
             \\     and then exit. Normal mode is to remain running and rotate keys on
             \\     timer intervals forever.
             \\
-            \\This is tofurkey v1.3.0 (EXPERIMENTAL Zig variant)
+            \\This is tofurkey v1.3.1 (EXPERIMENTAL Zig variant)
             \\tofurkey is a tool for distributed sync of Linux TCP Fastopen key rotations
             \\More info is available at https://github.com/blblack/tofurkey
             \\
