@@ -6,10 +6,13 @@ const builtin = @import("builtin");
 const config = @import("config");
 // Handle 0.11.0->0.12-dev switch from "os" to "posix"
 const posix = if (@hasDecl(std, "posix")) std.posix else std.os;
+const os = std.os;
 const log = std.log;
+const crypto = std.crypto;
 const assert = std.debug.assert;
 const Allocator = std.mem.Allocator;
-const cw = @import("cwrappers.zig"); // This wraps our C stuff (libc, libsodium)
+const getopt = @import("getopt.zig"); // Our POSIXy getopt() native impl
+const lsys = @import("lsys.zig"); // non-libc Linux syscall stuff
 
 // This whole project, by its functional nature, only works on Linux
 comptime {
@@ -32,8 +35,11 @@ else
         };
     };
 
-// 0.11.0 vs 0.12-dev difference in open/openat flags (u32 vs struct)
-const old_open_flags: bool = @typeInfo(@TypeOf(posix.openat)).Fn.params[2].type.? == u32;
+// 0.11.0 vs 0.12-dev difference in open flags (u32 vs struct)
+const old_open_flags: bool = @typeInfo(@TypeOf(posix.open)).Fn.params[2].type.? == u32;
+
+// Constants for blake2b_kdf
+const KDF_KEYBYTES = 32;
 
 // The data length of a single ephemeral TFO key in binary form
 const TFO_KEY_LEN = 16;
@@ -75,30 +81,28 @@ comptime {
     assert(MAX_IVAL >= DEF_IVAL);
     assert(MIN_REAL_TIME > MAX_IVAL);
     assert(MAX_REAL_TIME + MAX_IVAL + FUDGE_S < std.math.maxInt(i64));
-    // time_t vs i64 is checked in cwrappers.zig
+    // Assert that time_t (timespec.tv_sec) can hold the same positive range as
+    // i64. This code is intentionally not compatible with 32-bit time_t!
+    assert(std.math.maxInt(posix.time_t) >= std.math.maxInt(i64));
 }
 
 // Default pathnames:
 const def_autokey_path = config.rundir ++ "/tofurkey.autokey";
 const def_procfs_path = "/proc/sys/net/ipv4/tcp_fastopen_key";
 
-// Constant non-secret context for the KDF (like an app-specific fixed salt)
-const kdf_ctx = [_]u8{ 't', 'o', 'f', 'u', 'r', 'k', 'e', 'y' };
-
-// Assert that kdf_blake2b has the sizes we expect
-comptime {
-    assert(cw.b2b_CONTEXTBYTES == 8);
-    assert(cw.b2b_KEYBYTES == 32);
-    assert(TFO_KEY_LEN >= cw.b2b_BYTES_MIN);
-    assert(TFO_KEY_LEN <= cw.b2b_BYTES_MAX);
-}
+// non-secret context for the KDF (like an app-specific fixed salt)
+const kdf_ctx = [8]u8{ 't', 'o', 'f', 'u', 'r', 'k', 'e', 'y' };
 
 // Helpers to block/restore signals around sensitive code paths
 fn block_all_signals() posix.sigset_t {
+    // linux filled_sigset definition copied out of master std/os/linux.zig, so
+    // we can use it on 0.11.0, can remove later.
+    const sigset_len = @typeInfo(posix.sigset_t).Array.len;
+    const usize_bits = @typeInfo(usize).Int.bits;
+    const filled_sigset = [_]u32{(1 << (31 & (usize_bits - 1))) - 1} ++ [_]u32{0} ** (sigset_len - 1);
+
     var sigmask_prev: posix.sigset_t = undefined;
-    var sigmask_all: posix.sigset_t = undefined;
-    std.c.sigfillset(&sigmask_all);
-    posix.sigprocmask(posix.SIG.SETMASK, &sigmask_all, &sigmask_prev);
+    posix.sigprocmask(posix.SIG.SETMASK, &filled_sigset, &sigmask_prev);
     return sigmask_prev;
 }
 
@@ -113,33 +117,33 @@ fn sysd_notify_ready() !void {
     const spath = posix.getenv("NOTIFY_SOCKET") orelse return;
     // Must be an abstract socket or absolute path
     if (spath.len < 2 or (spath[0] != '@' and spath[0] != '/') or spath[1] == 0) {
-        log.err("Invalid systemd NOTIFY_SOCKET path '{s}'", .{spath});
+        log.err("Invalid NOTIFY_SOCKET path '{s}'", .{spath});
         return error.SystemdNotify;
     }
     var sun = std.net.Address.initUnix(spath) catch |err| {
-        log.err("Cannot create sockaddr struct for systemd NOTIFY_SOCKET with path '{s}'", .{spath});
+        log.err("Cannot create sockaddr struct for NOTIFY_SOCKET with path '{s}'", .{spath});
         return err;
     };
     if (sun.un.path[0] == '@')
         sun.un.path[0] = 0;
 
     const fd = posix.socket(posix.AF.UNIX, posix.SOCK.DGRAM | posix.SOCK.CLOEXEC, 0) catch |err| {
-        log.err("Cannot create unix dgram socket fd for systemd NOTIFY_SOCKET", .{});
+        log.err("Cannot create unix dgram socket fd for NOTIFY_SOCKET", .{});
         return err;
     };
     defer posix.close(fd);
     const strv = posix.sendto(fd, "READY=1", posix.MSG.NOSIGNAL, &sun.any, sun.getOsSockLen()) catch |err| {
-        log.err("Cannot send READY=1 to systemd NOTIFY_SOCKET '{s}'", .{spath});
+        log.err("Cannot send READY=1 to NOTIFY_SOCKET '{s}'", .{spath});
         return err;
     };
     if (strv != 7) {
-        log.err("Cannot send READY=1 to systemd NOTIFY_SOCKET '{s}' (sent {d}/7 bytes)", .{ spath, strv });
+        log.err("Cannot send READY=1 to NOTIFY_SOCKET '{s}' (sent {d}/7 bytes)", .{ spath, strv });
         return error.SystemdNotify;
     }
 }
 
 // Safely read the main key file.
-inline fn safe_read_key(mainkey: *[cw.b2b_KEYBYTES]u8, mainkey_path: []const u8) !void {
+inline fn safe_read_key(mainkey: *[KDF_KEYBYTES]u8, mainkey_path: []const u8) !void {
     const key_fd = if (old_open_flags)
         try posix.open(mainkey_path, posix.O.RDONLY | posix.O.CLOEXEC, 0)
     else
@@ -163,7 +167,7 @@ inline fn safe_write_procfs(keys_ascii: *const [TFO_ASCII_ALLOC]u8, procfs_path:
 }
 
 // Safely write an autogenerated main key.
-inline fn safe_write_autokey(mainkey: *const [cw.b2b_KEYBYTES]u8, autokey_path: []const u8) !void {
+inline fn safe_write_autokey(mainkey: *const [KDF_KEYBYTES]u8, autokey_path: []const u8) !void {
     const autokey_fd = if (old_open_flags)
         try posix.open(autokey_path, posix.O.WRONLY | posix.O.CREAT | posix.O.TRUNC | posix.O.CLOEXEC | posix.O.SYNC, posix.S.IRUSR | posix.S.IWUSR)
     else
@@ -174,25 +178,25 @@ inline fn safe_write_autokey(mainkey: *const [cw.b2b_KEYBYTES]u8, autokey_path: 
         return error.KeyShortWrite;
 }
 
-fn autokey_setup(sec_alloc: Allocator, mainkey_path: []const u8) !void {
-    log.info("No -k argument was given, so this invocation will use a local, autogenerated key at '{s}'. This will /not/ allow for synchronization across hosts!", .{mainkey_path});
+fn autokey_setup(mainkey_path: []const u8) !void {
+    log.info("No -k arg given.  Will use a host-local autokey at {s}. This does not allow for cross-host synch!", .{mainkey_path});
 
     // Block signals while dealing with secure memory so that we always
     // wipe before exiting on a clean terminating signal
     const oldmask = block_all_signals();
     defer restore_signals(oldmask);
 
-    // Allocate temporary main key storage
-    const mainkey = try sec_alloc.create([cw.b2b_KEYBYTES]u8);
-    defer sec_alloc.destroy(mainkey);
+    // Temporary main key storage
+    var mainkey: [KDF_KEYBYTES]u8 = undefined;
+    defer crypto.utils.secureZero(u8, &mainkey);
 
     // Do a trial read to determine if there's an existing autokey file which
     // is usable. If it's not usable, invent a random key and persist it.
-    safe_read_key(mainkey, mainkey_path) catch {
-        cw.sodium_memzero(mainkey);
+    safe_read_key(&mainkey, mainkey_path) catch {
+        crypto.utils.secureZero(u8, &mainkey);
         log.info("Could not read autokey file {s}, generating a new random one", .{mainkey_path});
-        cw.sodium_rand(mainkey);
-        try safe_write_autokey(mainkey, mainkey_path);
+        crypto.random.bytes(&mainkey);
+        try safe_write_autokey(&mainkey, mainkey_path);
     };
 }
 
@@ -212,6 +216,23 @@ fn convert_keys_ascii(keys_ascii: *[TFO_ASCII_ALLOC]u8, kp: *const [TFO_KEY_LEN]
     // zig fmt: on
     if (out.len != TFO_ASCII_ALLOC)
         return error.KeyFormattedLen;
+}
+
+// Handle 0.11.0 -> 0.12-dev capitalization change to std.builtin.Endian... :P
+fn endian_little() std.builtin.Endian {
+    return if (@typeInfo(std.builtin.Endian).Enum.fields[1].name[0] == 'L')
+        .Little // 0.11.0
+    else
+        .little; // 0.12-dev
+}
+
+// Must mirror libsodium:crypto_kdf_blake2b_derive_from_key() for compat
+fn blake2b_kdf(out: *[TFO_KEY_LEN]u8, subkey: u64, key: *const [KDF_KEYBYTES]u8) void {
+    var ctxpad: [16]u8 = [_]u8{0} ** 16;
+    @memcpy(ctxpad[0..8], &kdf_ctx);
+    var salt: [16]u8 = [_]u8{0} ** 16;
+    std.mem.writeInt(u64, salt[0..8], subkey, endian_little());
+    crypto.hash.blake2.Blake2b128.hash("", out, .{ .key = key, .salt = salt, .context = ctxpad });
 }
 
 // CLOCK_REALTIME, ignoring nanoseconds, range-validated, converted to u64
@@ -236,7 +257,7 @@ fn timecalc(now: u64, interval: u64) tc_out {
     // "ctr_primary" is a counter number for how many whole intervals have
     // passed since unix time zero, and relies on the sanity checks here:
     assert(interval >= MIN_IVAL); // enforced in parse_args
-    assert(now > interval); // enforced indirectly (args/gettime range limits + comptime assert on range relations)
+    assert(now > interval); // enforced indirectly (cf comptime time asserts near top)
     const ctr_primary = now / interval;
     assert(ctr_primary > 0); // implicit, but maybe not compiler-obvious
 
@@ -294,7 +315,7 @@ const cfg_s = struct {
     dry_run: bool,
     one_shot: bool,
 
-    fn init(alloc: Allocator, sec_alloc: Allocator) !*cfg_s {
+    fn init(alloc: Allocator) !*cfg_s {
         var self = try alloc.create(cfg_s);
         self.mainkey_path = undefined;
         self.procfs_path = undefined;
@@ -304,7 +325,7 @@ const cfg_s = struct {
         self.verbose_leaky = false;
         self.dry_run = false;
         self.one_shot = false;
-        try self._parse_args(alloc, sec_alloc);
+        try self._parse_args(alloc);
         return self;
     }
 
@@ -334,7 +355,7 @@ const cfg_s = struct {
             \\     and then exit. Normal mode is to remain running and rotate keys on
             \\     timer intervals forever.
             \\
-            \\This is tofurkey v1.2.0 (EXPERIMENTAL Zig variant)
+            \\This is tofurkey v1.3.0 (EXPERIMENTAL Zig variant)
             \\tofurkey is a tool for distributed sync of Linux TCP Fastopen key rotations
             \\More info is available at https://github.com/blblack/tofurkey
             \\
@@ -344,20 +365,20 @@ const cfg_s = struct {
         posix.exit(2);
     }
 
-    fn _parse_args(self: *cfg_s, alloc: Allocator, sec_alloc: Allocator) !void {
+    fn _parse_args(self: *cfg_s, alloc: Allocator) !void {
         var arg_autokey: ?[*:0]const u8 = null;
         var arg_mainkey: ?[*:0]const u8 = null;
         var arg_procfs: ?[*:0]const u8 = null;
-        const goi = try cw.GetOptIterator.init(posix.argv, ":k:i:P:T:a:vVno");
+        var goi = getopt.getopt(posix.argv, ":k:i:P:T:a:vVno");
         while (goi.next()) |optchar| {
             switch (optchar) {
                 'v' => self.verbose = true,
                 'n' => self.dry_run = true,
                 'o' => self.one_shot = true,
-                'k' => arg_mainkey = goi.optarg().?,
-                'a' => arg_autokey = goi.optarg().?,
+                'k' => arg_mainkey = goi.getOptArg().?,
+                'a' => arg_autokey = goi.getOptArg().?,
                 'i' => {
-                    const arg = goi.optarg().?;
+                    const arg = goi.getOptArg().?;
                     const i = std.fmt.parseInt(u64, std.mem.span(arg), 10) catch {
                         _usage("Cannot parse '{s}' as u64", .{arg});
                     };
@@ -366,13 +387,13 @@ const cfg_s = struct {
                     self.interval = i;
                 },
                 // These three are just for testsuite/debugging:
-                'P' => arg_procfs = goi.optarg().?,
+                'P' => arg_procfs = goi.getOptArg().?,
                 'V' => {
                     self.verbose = true;
                     self.verbose_leaky = true;
                 },
                 'T' => {
-                    const arg = goi.optarg().?;
+                    const arg = goi.getOptArg().?;
                     const t = std.fmt.parseInt(u64, std.mem.span(arg), 10) catch {
                         _usage("Cannot parse '{s}' as u64", .{arg});
                     };
@@ -382,13 +403,13 @@ const cfg_s = struct {
                     self.one_shot = true;
                 },
                 // Error cases
-                '?' => _usage("Invalid Option '-{c}'", .{goi.optopt()}),
-                ':' => _usage("Missing argument for '-{c}'", .{goi.optopt()}),
-                else => _usage("Unknown error processing CLI options", .{}),
+                '?' => _usage("Invalid Option '-{c}'", .{goi.getOptOpt()}),
+                ':' => _usage("Missing argument for '-{c}'", .{goi.getOptOpt()}),
+                else => unreachable,
             }
         }
 
-        if (goi.optind() != posix.argv.len)
+        if (goi.getOptInd() != posix.argv.len)
             _usage("Excess unknown CLI arguments after options", .{});
 
         // Handle path string defaulting and autokey logic, etc
@@ -418,7 +439,7 @@ const cfg_s = struct {
         self.mainkey_path = try alloc.dupe(u8, mainkey_path);
 
         if (arg_mainkey == null)
-            try autokey_setup(sec_alloc, self.mainkey_path);
+            try autokey_setup(self.mainkey_path);
     }
 
     fn deinit(self: *const cfg_s, alloc: Allocator) void {
@@ -429,70 +450,64 @@ const cfg_s = struct {
 };
 
 // The inner, security-sensitive part of set_keys()
-fn set_keys_secure(cfg: *const cfg_s, sec_alloc: Allocator, now: u64, ctr_primary: u64, ctr_backup: u64) !void {
+fn set_keys_secure(cfg: *const cfg_s, now: u64, ctr_primary: u64, ctr_backup: u64) !void {
     // Block signals while dealing with secure memory so that we always wipe
     // before exiting on a clean terminating signal
     const oldmask = block_all_signals();
     defer restore_signals(oldmask);
 
-    // Allocate storage for various keys in various forms:
-    const Keys = struct {
-        main: [cw.b2b_KEYBYTES]u8,
-        primary: [TFO_KEY_LEN]u8,
-        backup: [TFO_KEY_LEN]u8,
-        ascii: [TFO_ASCII_ALLOC]u8,
-    };
-    const k = try sec_alloc.create(Keys);
-    defer sec_alloc.destroy(k);
-
-    // Now read in the long-term main key file and generate our pair of ephemeral keys:
-    try safe_read_key(&k.main, cfg.mainkey_path);
-
-    // generate the pair of timed keys to set
-    try cw.b2b_derive_from_key(&k.primary, TFO_KEY_LEN, ctr_primary, &kdf_ctx, &k.main);
-    try cw.b2b_derive_from_key(&k.backup, TFO_KEY_LEN, ctr_backup, &kdf_ctx, &k.main);
-    cw.sodium_memzero(&k.main);
-
-    // convert the pair to the procfs ASCII format
-    try convert_keys_ascii(&k.ascii, &k.primary, &k.backup);
-    cw.sodium_memzero(&k.primary);
-    cw.sodium_memzero(&k.backup);
+    var key_ascii: [TFO_ASCII_ALLOC]u8 = undefined;
+    defer crypto.utils.secureZero(u8, &key_ascii);
+    {
+        var key_primary: [TFO_KEY_LEN]u8 = undefined;
+        var key_backup: [TFO_KEY_LEN]u8 = undefined;
+        defer crypto.utils.secureZero(u8, &key_primary);
+        defer crypto.utils.secureZero(u8, &key_backup);
+        {
+            var key_main: [KDF_KEYBYTES]u8 = undefined;
+            defer crypto.utils.secureZero(u8, &key_main);
+            try safe_read_key(&key_main, cfg.mainkey_path);
+            blake2b_kdf(&key_primary, ctr_primary, &key_main);
+            blake2b_kdf(&key_backup, ctr_backup, &key_main);
+        }
+        try convert_keys_ascii(&key_ascii, &key_primary, &key_backup);
+    }
 
     if (cfg.verbose_leaky)
-        log.info("Generated ASCII TFO keys for procfs write: [{d}] {s}", .{ now, &k.ascii });
+        log.info("Generated ASCII TFO keys for procfs write: [{d}] {s}", .{ now, &key_ascii });
     if (!cfg.dry_run)
-        try safe_write_procfs(&k.ascii, cfg.procfs_path);
-    cw.sodium_memzero(&k.ascii);
+        try safe_write_procfs(&key_ascii, cfg.procfs_path);
 }
 
 // Do the idempotent key generation + deployment based on current wall clock
 // (even if it's not exactly when we would've woken up), then returns the next
 // time we should wake up to rotate
-fn set_keys(cfg: *const cfg_s, sec_alloc: Allocator, now: u64) !u64 {
+fn set_keys(cfg: *const cfg_s, now: u64) !u64 {
     log.info("Setting keys for unix time {d}", .{now});
     const tc = timecalc(now, cfg.interval);
-    try set_keys_secure(cfg, sec_alloc, now, tc.ctr_primary, tc.ctr_backup);
+    try set_keys_secure(cfg, now, tc.ctr_primary, tc.ctr_backup);
     if (cfg.dry_run and cfg.verbose)
         log.info("Did not write to procfs because dry-run (-n) was specified", .{});
     return tc.next_wake;
 }
 
 pub fn main() !void {
-    try cw.sodium_init();
+    if (os.linux.geteuid() == 0)
+        try lsys.mlockall(lsys.MCL.CURRENT | lsys.MCL.FUTURE | lsys.MCL.ONFAULT);
+    const rlzero = posix.rlimit{ .cur = 0, .max = 0 };
+    try posix.setrlimit(.CORE, rlzero);
 
-    // plain C alloc for config/path/etc
-    const alloc = std.heap.c_allocator;
-    // secure storage for keys
-    var sa = cw.SodiumAllocator(){};
-    const sec_alloc = sa.allocator();
+    // plain GPA for config/path/etc
+    var general_purpose_allocator = std.heap.GeneralPurposeAllocator(.{}){};
+    const alloc = general_purpose_allocator.allocator();
 
-    const cfg: *const cfg_s = try cfg_s.init(alloc, sec_alloc);
+    const cfg: *const cfg_s = try cfg_s.init(alloc);
     defer cfg.deinit(alloc);
 
     // Initially set keys to whatever the current wall clock dictates, and exit
     // immediately if one-shot mode
     const initial_now = if (cfg.fake_time != 0) cfg.fake_time else try realtime_u64();
-    var next_wake = try set_keys(cfg, sec_alloc, initial_now);
+    var next_wake = try set_keys(cfg, initial_now);
     if (cfg.one_shot) {
         log.info("Exiting due to one-shot mode (-o flag)", .{});
         return;
@@ -506,10 +521,16 @@ pub fn main() !void {
     if (cfg.verbose)
         log.info("Will set keys at each half-interval, when unix_time % {d} ~= 2", .{cfg.interval / 2});
     while (true) {
-        const next_wake_fudged = next_wake + FUDGE_S;
+        const next_fudged = next_wake + FUDGE_S;
         if (cfg.verbose)
-            log.info("Sleeping until next half-interval wakeup at {d}", .{next_wake_fudged});
-        try cw.clock_nanosleep_real_abs(next_wake_fudged, FUDGE_NS);
-        next_wake = try set_keys(cfg, sec_alloc, try realtime_u64());
+            log.info("Sleeping until next half-interval wakeup at {d}", .{next_fudged});
+        try lsys.clock_nanosleep(posix.CLOCK.REALTIME, lsys.TIMER.ABSTIME, next_fudged, FUDGE_NS);
+        next_wake = try set_keys(cfg, try realtime_u64());
     }
+}
+
+test {
+    // Make sure we run unit tests in our other local import files
+    std.testing.refAllDecls(getopt);
+    std.testing.refAllDecls(lsys);
 }

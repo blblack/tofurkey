@@ -158,8 +158,8 @@ making comparison of the two languages easy, while still taking
 advantage of Zig stuff everywhere it can.  It generally has the same
 core function names, same approximate file layout, mostly the same
 commentary and log outputs, etc.  I plan to keep this port in sync with
-changes to the C source as I go.  As with the C code, it requires
-libsodium (and headers).
+changes to the C source as I go. Implementation is pure Zig using only
+the Zig Standard Library (no libc, no libsodium).
 
 Currently, this builds correctly with both zig 0.11.0 and zig's current
 (as of this writing) master branch (0.12.0-dev), by the magic of
@@ -199,8 +199,3 @@ Currently, this builds correctly with both zig 0.11.0 and zig's current
 
     # Do the final install to system dirs (reuses cached compile from above):
     sudo zig build install -Doptimize=ReleaseSafe --prefix /usr
-
-### Known eventual TODOs for the Zig port:
-
-* clock\_nanosleep() - I made a wrapper that's tailored to our use, but should build a generic real implementation to upstream to std.posix. It clearly belongs, it's just missing there currently.
-* getopt() - I made a zig-style iterator interface to wrap libc for now, but really the whole getopt logic should just be implemented in native zig with a goal of upstreaming to std somewhere (not because getopt is all that awesome, more because it would ease adoption/ports for others with getopt()-based CLI parsing in old C projects).

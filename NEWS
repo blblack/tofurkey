@@ -1,3 +1,14 @@
+1.3.0 - 2024-03-03
+    * Coredumps are disabled at startup via setrlimit()
+    * Process address space locked into memory at startup via
+      mlockall(), if running as root.
+    * Various keys are now stored in local stack vars, rather than
+      sodium_malloc allocations (the above changes bring most of the same
+      benefits with less complexity).
+    * Zig port is now pure Zig (no longer links libc or libsodium), but
+      there's still a few bits in lsys.zig and getopt.zig that should be
+      upstreamed to std in some form.
+
 1.2.0 - 2024-02-27
     * TL;DR - No user-visible functional changes, but some log outputs
       changed and a ton of internal refactoring/cleanup happened
