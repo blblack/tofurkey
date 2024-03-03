@@ -35,8 +35,8 @@ else
         };
     };
 
-// 0.11.0 vs 0.12-dev difference in open/openat flags (u32 vs struct)
-const old_open_flags: bool = @typeInfo(@TypeOf(posix.openat)).Fn.params[2].type.? == u32;
+// 0.11.0 vs 0.12-dev difference in open flags (u32 vs struct)
+const old_open_flags: bool = @typeInfo(@TypeOf(posix.open)).Fn.params[2].type.? == u32;
 
 // Constants for blake2b_kdf
 const KDF_KEYBYTES = 32;
