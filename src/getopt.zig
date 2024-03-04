@@ -11,15 +11,15 @@ const std = @import("std");
 ///
 /// Basic cheat sheet for porting:
 ///
-/// Normal POSIX/C getopt()                || Zig getopt()
-/// ---------------------------------------------------------------------
-/// while((f = getopt(argc, argv, "abc"))  || var o = getopt(std.posix.argv, "abc");
-///            != -1) { ... }              || while(o.next()) |f| { ... }
-/// char* x = optarg;                      || var x = o.getOptArg().?;
-/// char c = optopt;                       || var c = o.getOptOpt();
-/// int i = optind;                        || var i = o.getOptInd();
-/// opterr = 0;                            || o.setOptErr(false);
-/// optind = 0; // non-standard            || [just make a new object]
+///     Normal POSIX/C getopt()                || Zig getopt()
+///     ---------------------------------------------------------------------
+///     while((f = getopt(argc, argv, "abc"))  || var o = getopt(std.posix.argv, "abc");
+///                != -1) { ... }              || while(o.next()) |f| { ... }
+///     char* x = optarg;                      || var x = o.getOptArg().?;
+///     char c = optopt;                       || var c = o.getOptOpt();
+///     int i = optind;                        || var i = o.getOptInd();
+///     opterr = 0;                            || o.setOptErr(false);
+///     optind = 0; // non-standard            || [just make a new object]
 ///
 pub fn getopt(args: []const [*:0]const u8, optstr: [:0]const u8) GetOptIterator {
     return GetOptIterator{
@@ -66,11 +66,14 @@ pub const GetOptIterator = struct {
         }
     }
 
-    /// Get the next flag character, returns null if none left.  Returns '?'
-    /// for an invalid option (get the offending flag from .getOptOpt()),
-    /// returns '?' or ':' (if leading char of optopt was ':') on a valid
+    /// Get the next flag character as ?u8, returns null if none left.
+    ///
+    /// Returns '?' for an invalid option (get the offending flag from
+    /// .getOptOpt()).
+    ///
+    /// Returns '?' (or ':' if leading char of optopt was ':') on a valid
     /// option which was missing its required argument because we reached the
-    /// end of argv (and again, get the offending option from .getOptOpt()).
+    /// end of argv (get the offending option from .getOptOpt()).
     pub fn next(self: *GetOptIterator) ?u8 {
         // If there's no args left there's nothing to do!
         if (self._optind >= self._argv.len)
@@ -183,9 +186,10 @@ pub const GetOptIterator = struct {
     }
 
     /// This can be used to turn off stderr outputs from .next() by setting
-    /// false, or to turn them back on (default) by setting true.  If the
-    /// optstr starts with ':', this overrides opterr and permanently disables
-    /// stderr outputs.
+    /// false, or to turn them back on (default) by setting true.
+    ///
+    /// If the optstr starts with ':', this overrides opterr and permanently
+    /// disables stderr outputs.
     pub fn setOptErr(self: *GetOptIterator, opterr: bool) void {
         self._opterr = opterr;
     }
