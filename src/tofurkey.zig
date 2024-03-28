@@ -369,7 +369,7 @@ const cfg_s = struct {
         var arg_autokey: ?[*:0]const u8 = null;
         var arg_mainkey: ?[*:0]const u8 = null;
         var arg_procfs: ?[*:0]const u8 = null;
-        var goi = getopt.getopt(posix.argv, ":k:i:P:T:a:vVno");
+        var goi = getopt.getopt(os.argv, ":k:i:P:T:a:vVno");
         while (goi.next()) |optchar| {
             switch (optchar) {
                 'v' => self.verbose = true,
@@ -409,7 +409,7 @@ const cfg_s = struct {
             }
         }
 
-        if (goi.getOptInd() != posix.argv.len)
+        if (goi.getOptInd() != os.argv.len)
             _usage("Excess unknown CLI arguments after options", .{});
 
         // Handle path string defaulting and autokey logic, etc
