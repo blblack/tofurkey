@@ -42,7 +42,7 @@ pub fn _clock_nanosleep(clk_id: i32, flags: i32, req: *const posix.timespec, rem
 }
 
 // -------------------
-// These bits would go in lib/std/os.zig (aka posix) and are the real public interface
+// These bits would go in lib/std/posix.zig and are the real public interface
 // -------------------
 
 pub fn mlockall(flags: i32) !void {

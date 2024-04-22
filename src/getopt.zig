@@ -13,7 +13,7 @@ const std = @import("std");
 ///
 ///     Normal POSIX/C getopt()                || Zig getopt()
 ///     ---------------------------------------------------------------------
-///     while((f = getopt(argc, argv, "abc"))  || var o = getopt(std.posix.argv, "abc");
+///     while((f = getopt(argc, argv, "abc"))  || var o = getopt(std.os.argv, "abc");
 ///                != -1) { ... }              || while(o.next()) |f| { ... }
 ///     char* x = optarg;                      || var x = o.getOptArg().?;
 ///     char c = optopt;                       || var c = o.getOptOpt();
@@ -201,7 +201,7 @@ test getopt {
         "myprogram", "-i", "1234", "-v", "--", "foo",
     };
 
-    // In a real program, you'd probably pass std.posix.argv instead of &myargv
+    // In a real program, you'd probably pass std.os.argv instead of &myargv
     var goi = getopt(&myargv, ":vi:");
     while (goi.next()) |flag| {
         switch (flag) {
