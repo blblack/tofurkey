@@ -155,10 +155,7 @@ pub const GetOptIterator = struct {
             }
         } else {
             // For a non-final character, use the rest of elem as optarg:
-            const len = std.mem.span(elem).len;
-            self._optarg = elem[self._nextc..len :0];
-            // ^ 0.11.0 requires above method, but 0.12+ allows:
-            // self._optarg = elem[self._nextc.. :0];
+            self._optarg = elem[self._nextc.. :0];
         }
 
         // inc optind and reset nextc for consumed arg
