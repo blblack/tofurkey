@@ -8,8 +8,7 @@
 
 const std = @import("std");
 const builtin = @import("builtin");
-// Handle 0.11.0->0.12-dev switch from "os" to "posix"
-const posix = if (@hasDecl(std, "posix")) std.posix else std.os;
+const posix = std.posix;
 
 // -------------------
 // These bits would go in lib/std/os/linux.zig (without the _ prefix on the call):

@@ -25,7 +25,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        zig: [ 0.11.0, master ]
+        zig: [ 0.12.0, master ]
         opt: [ Debug, ReleaseFast ]
     name: build and run tests with Zig ${{ matrix.zig }} ${{ matrix.opt }}
     runs-on: ubuntu-latest
