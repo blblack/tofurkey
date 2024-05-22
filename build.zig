@@ -8,7 +8,7 @@ pub fn build(b: *std.Build) void {
     const optimize = b.standardOptimizeOption(.{});
     const exe = b.addExecutable(.{
         .name = "tofurkey",
-        .root_source_file = .{ .path = "src/tofurkey.zig" },
+        .root_source_file = b.path("src/tofurkey.zig"),
         .single_threaded = true,
         .target = target,
         .optimize = optimize,
@@ -29,12 +29,12 @@ pub fn build(b: *std.Build) void {
     // Install the manpage as well, with support for overriding the
     // prefix-relative destination directory:
     const man8dir = b.option([]const u8, "man8dir", "Prefix-relative subpath for man8 dir, default 'share/man/man8'") orelse "share/man/man8";
-    const man_page = b.addInstallFileWithDir(.{ .path = "tofurkey.8" }, .{ .custom = man8dir }, "tofurkey.8");
+    const man_page = b.addInstallFileWithDir(b.path("tofurkey.8"), .{ .custom = man8dir }, "tofurkey.8");
     b.getInstallStep().dependOn(&man_page.step);
 
     // "zig build test" -> Unit testing
     const unit_exe = b.addTest(.{
-        .root_source_file = .{ .path = "src/tofurkey.zig" },
+        .root_source_file = b.path("src/tofurkey.zig"),
         .single_threaded = true,
         .target = target,
         .optimize = optimize,
