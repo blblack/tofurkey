@@ -1,5 +1,5 @@
 rundir.inc
 tofurkey
 t/testout
-zig-cache
+.zig-cache
 zig-out

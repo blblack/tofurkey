@@ -68,7 +68,7 @@ comptime {
     assert(MAX_IVAL >= DEF_IVAL);
     assert(MIN_REAL_TIME > MAX_IVAL);
     assert(MAX_REAL_TIME + MAX_IVAL + FUDGE_S < std.math.maxInt(i64));
-    // Assert that time_t (timespec.tv_sec) can hold the same positive range as
+    // Assert that time_t (timespec.sec) can hold the same positive range as
     // i64. This code is intentionally not compatible with 32-bit time_t!
     assert(std.math.maxInt(posix.time_t) >= std.math.maxInt(i64));
 }
@@ -201,13 +201,13 @@ fn blake2b_kdf(out: *[TFO_KEY_LEN]u8, subkey: u64, key: *const [KDF_KEYBYTES]u8)
 
 // CLOCK_REALTIME, ignoring nanoseconds, range-validated, converted to u64
 fn realtime_u64() !u64 {
-    var ts = posix.timespec{ .tv_sec = 0, .tv_nsec = 0 };
-    try posix.clock_gettime(posix.CLOCK.REALTIME, &ts);
-    if (ts.tv_sec < MIN_REAL_TIME or ts.tv_sec > MAX_REAL_TIME) {
-        log.err("Realtime value {d} is insane", .{ts.tv_sec});
+    var ts = posix.timespec{ .sec = 0, .nsec = 0 };
+    try posix.clock_gettime(.REALTIME, &ts);
+    if (ts.sec < MIN_REAL_TIME or ts.sec > MAX_REAL_TIME) {
+        log.err("Realtime value {d} is insane", .{ts.sec});
         return error.TimeRange;
     }
-    return @intCast(ts.tv_sec);
+    return @intCast(ts.sec);
 }
 
 // timecalc() is a pure numeric function that takes care of the critical
@@ -457,7 +457,7 @@ fn set_keys(cfg: *const cfg_s, now: u64) !u64 {
 
 pub fn main() !void {
     if (os.linux.geteuid() == 0)
-        try lsys.mlockall(lsys.MCL.CURRENT | lsys.MCL.FUTURE | lsys.MCL.ONFAULT);
+        try lsys.mlockall(.{ .CURRENT = true, .FUTURE = true, .ONFAULT = true });
     const rlzero = posix.rlimit{ .cur = 0, .max = 0 };
     try posix.setrlimit(.CORE, rlzero);
 
@@ -488,7 +488,7 @@ pub fn main() !void {
         const next_fudged = next_wake + FUDGE_S;
         if (cfg.verbose)
             log.info("Sleeping until next half-interval wakeup at {d}", .{next_fudged});
-        try lsys.clock_nanosleep(posix.CLOCK.REALTIME, lsys.TIMER.ABSTIME, next_fudged, FUDGE_NS);
+        try lsys.clock_nanosleep(.REALTIME, .ABSTIME, next_fudged, FUDGE_NS);
         next_wake = try set_keys(cfg, try realtime_u64());
     }
 }

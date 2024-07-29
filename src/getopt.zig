@@ -58,8 +58,8 @@ pub const GetOptIterator = struct {
         const stderr = std.io.getStdErr().writer();
         var bw = std.io.bufferedWriter(stderr);
         const writer = bw.writer();
-        std.debug.getStderrMutex().lock();
-        defer std.debug.getStderrMutex().unlock();
+        std.debug.lockStdErr();
+        defer std.debug.unlockStdErr();
         nosuspend {
             writer.print(format ++ "\n", args) catch return;
             bw.flush() catch return;

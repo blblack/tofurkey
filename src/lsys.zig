@@ -19,33 +19,37 @@ const is_ppc = native_arch.isPPC();
 const is_ppc64 = native_arch.isPPC64();
 const is_sparc = native_arch.isSPARC();
 
-pub const MCL = if (is_ppc or is_ppc64 or is_sparc) struct {
-    pub const CURRENT = 0x2000;
-    pub const FUTURE = 0x4000;
-    pub const ONFAULT = 0x8000;
-} else struct {
-    pub const CURRENT = 0x01;
-    pub const FUTURE = 0x02;
-    pub const ONFAULT = 0x04;
+pub const MCL = if (is_ppc or is_ppc64 or is_sparc) packed struct(u32) {
+    _0: u13 = 0,
+    CURRENT: bool = false,
+    FUTURE: bool = false,
+    ONFAULT: bool = false,
+    _17: u16 = 0,
+} else packed struct(u32) {
+    CURRENT: bool = false,
+    FUTURE: bool = false,
+    ONFAULT: bool = false,
+    _: u29 = 0,
 };
 
-pub const TIMER = struct {
-    pub const ABSTIME = 0x01;
+pub const timer_t = enum(u32) {
+    RELTIME = 0,
+    ABSTIME = 1,
 };
 
-pub fn _mlockall(flags: i32) usize {
-    return std.os.linux.syscall1(.mlockall, @as(usize, @bitCast(@as(isize, flags))));
+pub fn _mlockall(flags: MCL) usize {
+    return std.os.linux.syscall1(.mlockall, @as(u32, @bitCast(flags)));
 }
 
-pub fn _clock_nanosleep(clk_id: i32, flags: i32, req: *const posix.timespec, rem: ?*posix.timespec) usize {
-    return std.os.linux.syscall4(.clock_nanosleep, @as(usize, @bitCast(@as(isize, clk_id))), @as(usize, @bitCast(@as(isize, flags))), @intFromPtr(req), @intFromPtr(rem));
+pub fn _clock_nanosleep(clk_id: std.os.linux.clockid_t, flags: timer_t, req: *const posix.timespec, rem: ?*posix.timespec) usize {
+    return std.os.linux.syscall4(.clock_nanosleep, @as(usize, @intFromEnum(clk_id)), @as(usize, @intFromEnum(flags)), @intFromPtr(req), @intFromPtr(rem));
 }
 
 // -------------------
 // These bits would go in lib/std/posix.zig and are the real public interface
 // -------------------
 
-pub fn mlockall(flags: i32) !void {
+pub fn mlockall(flags: MCL) !void {
     switch (posix.errno(_mlockall(flags))) {
         .SUCCESS => return,
         .INVAL => return error.InvalidArgument,
@@ -58,17 +62,17 @@ pub fn mlockall(flags: i32) !void {
 // combination of std's existing clock_gettime() and nanosleep(), but modified
 // to handle the ABSTIME case as well.  errno is slightly-different too, and
 // AFAIK Darwin doesn't have this syscall.
-pub fn clock_nanosleep(clk_id: i32, flags: i32, seconds: u64, nanoseconds: u64) !void {
+pub fn clock_nanosleep(clk_id: std.os.linux.clockid_t, flags: timer_t, seconds: u64, nanoseconds: u64) !void {
     var req = posix.timespec{
-        .tv_sec = std.math.cast(isize, seconds) orelse std.math.maxInt(isize),
-        .tv_nsec = std.math.cast(isize, nanoseconds) orelse std.math.maxInt(isize),
+        .sec = std.math.cast(isize, seconds) orelse std.math.maxInt(isize),
+        .nsec = std.math.cast(isize, nanoseconds) orelse std.math.maxInt(isize),
     };
     var rem: posix.timespec = undefined;
     while (true) {
         switch (posix.errno(_clock_nanosleep(clk_id, flags, &req, &rem))) {
             .SUCCESS => return,
             .INTR => {
-                if (flags != TIMER.ABSTIME)
+                if (flags != .ABSTIME)
                     req = rem;
                 continue;
             },
@@ -83,6 +87,6 @@ test "clock_nanosleep basic smoke" {
     // Get current time and sleep absolutely until then, with the nsec
     // truncated to zero. This should return "immediately"
     var ts: posix.timespec = undefined;
-    try posix.clock_gettime(posix.CLOCK.REALTIME, &ts);
-    try clock_nanosleep(posix.CLOCK.REALTIME, TIMER.ABSTIME, @intCast(ts.tv_sec), 0);
+    try posix.clock_gettime(.REALTIME, &ts);
+    try clock_nanosleep(.REALTIME, .ABSTIME, @intCast(ts.sec), 0);
 }
