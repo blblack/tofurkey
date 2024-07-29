@@ -84,5 +84,5 @@ test "clock_nanosleep basic smoke" {
     // truncated to zero. This should return "immediately"
     var ts: posix.timespec = undefined;
     try posix.clock_gettime(posix.CLOCK.REALTIME, &ts);
-    try clock_nanosleep(posix.CLOCK.REALTIME, TIMER.ABSTIME, @intCast(ts.tv_sec), @intCast(ts.tv_nsec));
+    try clock_nanosleep(posix.CLOCK.REALTIME, TIMER.ABSTIME, @intCast(ts.tv_sec), 0);
 }
