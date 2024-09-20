@@ -161,8 +161,8 @@ commentary and log outputs, etc.  I plan to keep this port in sync with
 changes to the C source as I go. Implementation is pure Zig using only
 the Zig Standard Library (no libc, no libsodium).
 
-Currently, this builds correctly with both zig 0.12.0 and zig's current
-(as of this writing) master branch (0.13.0-dev).
+Currently, this builds correctly with zig master (0.14.0-dev) as of this
+writing.  Will try to keep it in sync with master for now.
 
 ### Building/testing/installing the experimental zig port
 

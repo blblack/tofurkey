@@ -14,12 +14,8 @@ const posix = std.posix;
 // These bits would go in lib/std/os/linux.zig (without the _ prefix on the call):
 // -------------------
 
-const native_arch = builtin.cpu.arch;
-const is_ppc = native_arch.isPPC();
-const is_ppc64 = native_arch.isPPC64();
-const is_sparc = native_arch.isSPARC();
-
-pub const MCL = if (is_ppc or is_ppc64 or is_sparc) packed struct(u32) {
+const arch = builtin.cpu.arch;
+pub const MCL = if (arch.isPowerPC() or arch.isSPARC()) packed struct(u32) {
     _0: u13 = 0,
     CURRENT: bool = false,
     FUTURE: bool = false,
