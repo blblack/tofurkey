@@ -8,7 +8,7 @@ else
     SLOW=0
 fi
 
-# default to C binary in-tree, override via $1 for zig cases
+# default to C binary in-tree
 BIN=$1
 if [[ "${BIN}x" = "x" ]]; then
     BIN=./tofurkey

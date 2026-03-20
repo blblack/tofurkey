@@ -1,3 +1,8 @@
+    * Drop the Zig port entirely.  I wasn't keeping it up to date, and it was
+      mostly an early playground for me learning some things about Zig a couple
+      years ago. I love Zig now and use it in other things, but this tiny port
+      no longer serves any purpose!
+
 1.3.2 - 2024-04-22
     * Zig port: Drop support for 0.11.0 (0.12.0 is current)
 
