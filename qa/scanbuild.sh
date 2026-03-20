@@ -5,4 +5,4 @@ if [ ! -d t ] || [ ! -d qa ]; then
 fi
 set -e
 set -x
-scan-build make clean all
+scan-build-21 make clean all
