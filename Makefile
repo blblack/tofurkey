@@ -15,7 +15,7 @@ LDLIBS ?= -lsodium
 all: tofurkey
 rundir.inc: Makefile
 	echo "// Dynamically created by make\n#define RUNDIR \"$(rundir)\"" >$@
-tofurkey: src/tofurkey.c rundir.inc Makefile
+tofurkey: tofurkey.c rundir.inc Makefile
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) -I. $(filter %.c,$^) $(LDLIBS) -o $@
 clean:
 	$(RM) rundir.inc
