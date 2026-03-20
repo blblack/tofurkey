@@ -575,6 +575,17 @@ static uint64_t set_keys(const struct cfg* const cfg_p, const uint64_t now)
     return tc.next_wake;
 }
 
+F_NONNULL
+static void abs_sleep_until(const struct timespec* const next_ts_p)
+{
+    int cns_rv;
+    do {
+        cns_rv = clock_nanosleep(CLOCK_REALTIME, TIMER_ABSTIME, next_ts_p, NULL);
+    } while (cns_rv == EINTR);
+    if (cns_rv)
+        log_fatal("clock_nanosleep() failed: %s", strerror(cns_rv));
+}
+
 int main(int argc, char* argv[])
 {
     if (!geteuid())
@@ -611,9 +622,7 @@ int main(int argc, char* argv[])
         const time_t next_fudged = (time_t)(next_wake + FUDGE_S);
         const struct timespec next_ts = { .tv_sec = next_fudged, .tv_nsec = FUDGE_NS };
         log_verbose("Sleeping until next half-interval wakeup at %" PRIu64, next_fudged);
-        const int cnrv = clock_nanosleep(CLOCK_REALTIME, TIMER_ABSTIME, &next_ts, NULL);
-        if (cnrv)
-            log_fatal("clock_nanosleep() failed: %s", strerror(cnrv));
+        abs_sleep_until(&next_ts);
         next_wake = set_keys(cfg_p, realtime_u64());
     }
     // unreachable, but is what we'd do if actually broke out of the loop
