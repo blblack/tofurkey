@@ -1,3 +1,9 @@
+1.3.4 - 2026-03-20
+    * Now defends against the (unlikely) future possibility of EINTR during our
+      long clock_nanosleep() waits, just in case.
+    * Made some minor QA script tweaks and added more "const" to some fn args
+    * Simplified the source tree layout
+
 1.3.3 - 2026-03-20
     * Drop the Zig port entirely.  I wasn't keeping it up to date, and it was
       mostly an early playground for me learning some things about Zig a couple
