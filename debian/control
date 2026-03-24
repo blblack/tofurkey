@@ -1,0 +1,21 @@
+Source: tofurkey
+Section: net
+Priority: optional
+Maintainer: Simon Lyngshede <slyngshede@wikimedia.org>
+Rules-Requires-Root: no
+Build-Depends:
+ debhelper-compat (= 13),
+Standards-Version: 4.7.2
+Homepage: https://github.com/blblack/tofurkey
+
+Package: tofurkey
+Architecture: any
+Depends:
+ ${shlibs:Depends},
+ ${misc:Depends},
+ libsodium23,
+Description: Linux TCP Fast Open key rotation
+ Tofurkey is a tool for distributes sync of Linux TCP Fast Open (TFO) key rotation.
+ This is a simple daemon which manages the timely, synchronized, deterministic
+ rotation of TCP Fastopen (TFO) keys across a cluster of Linux machines. Keys are
+ set via the Linux procfs interface for dual keys in /proc/sys/net/ipv4/tcp_fastopen_key  

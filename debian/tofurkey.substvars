@@ -1,0 +1,3 @@
+shlibs:Depends=libc6 (>= 2.38), libsodium23 (>= 1.0.12)
+misc:Depends=
+misc:Pre-Depends=

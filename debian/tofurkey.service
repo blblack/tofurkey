@@ -1,0 +1,12 @@
+[Unit]
+Description=Tofurkey
+ConditionPathExists=/etc/tofurkey/secret
+
+[Service]
+Restart=always
+User=root
+SyslogIdentifier = "tofurkey"
+ExecStart=/usr/sbin/tofurkey -k /etc/tofurkey/secret
+
+[Install]
+WantedBy=multi-user.target

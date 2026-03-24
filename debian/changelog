@@ -1,0 +1,5 @@
+tofurkey (1.3.4) UNRELEASED; urgency=medium
+
+  * Initial Debian package build.
+
+ -- Simon Lyngshede <slyngshede@wikimedia.org>  Tue, 24 Mar 2026 11:20:04 +0100
