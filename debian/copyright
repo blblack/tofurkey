@@ -1,12 +1,12 @@
 Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
-Source: <url://example.com>
+Source: https://github.com/blblack/tofurkey
 Upstream-Name: tofurkey
-Upstream-Contact: <preferred name and address to reach the upstream project>
+Upstream-Contact: blblack@gmail.com
 
 Files:
  *
 Copyright:
- 2026 Brandon L. Black 
+ 2026 Brandon L. Black
 License: 0BSD
 
 Files:
@@ -16,8 +16,8 @@ Copyright:
 License: 0BSD
 
 License: 0BSD
- Copyright (C) 2026 by Brandon L. Black 
- . 
+ Copyright (C) 2026 by Brandon L. Black
+ .
  THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL
  WARRANTIES WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES
  OF MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE
@@ -26,4 +26,3 @@ License: 0BSD
  AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT
  OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  .
-
